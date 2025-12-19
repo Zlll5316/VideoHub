@@ -1,6 +1,6 @@
 import { LayoutDashboard, Library, Download, Settings, LogOut, Users, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 interface SidebarProps {
   activeMenu?: string;
@@ -16,11 +16,16 @@ const menuItems = [
 ];
 
 export default function Sidebar({ activeMenu = 'dashboard', onMenuChange }: SidebarProps) {
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    // TODO: 清除登录状态
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        alert(`退出登录失败: ${error.message}`);
+      }
+      // 退出成功会自动触发 onAuthStateChange，App.tsx 会自动显示登录页
+    } catch (error) {
+      alert(`发生错误: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   };
 
   return (

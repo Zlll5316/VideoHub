@@ -1,12 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, LogIn, UserPlus } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
-interface LoginProps {
-  onLogin: () => void;
-}
-
-export default function Login({ onLogin }: LoginProps) {
+export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -16,12 +13,43 @@ export default function Login({ onLogin }: LoginProps) {
     e.preventDefault();
     setIsLoading(true);
 
-    // 模拟登录/注册请求
-    setTimeout(() => {
+    try {
+      if (isSignUp) {
+        // 注册
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) {
+          alert(`注册失败: ${error.message}`);
+          setIsLoading(false);
+          return;
+        }
+        
+        alert('注册成功！请检查邮箱验证链接。');
+        setIsLoading(false);
+      } else {
+        // 登录 - 必须调用 supabase.auth.signInWithPassword
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          // 登录失败必须报错，不能放行
+          alert(`登录失败: ${error.message}`);
+          setIsLoading(false);
+          return;
+        }
+        
+        // 登录成功会自动触发 onAuthStateChange，但也要停止加载状态
+        setIsLoading(false);
+      }
+    } catch (error) {
+      alert(`发生错误: ${error instanceof Error ? error.message : '未知错误'}`);
       setIsLoading(false);
-      // 登录/注册成功，调用 onLogin 回调
-      onLogin();
-    }, 1000);
+    }
   };
 
   return (
@@ -125,9 +153,11 @@ export default function Login({ onLogin }: LoginProps) {
           </div>
 
           {/* Footer Text */}
-          <p className="text-center text-xs text-slate-500 mt-6">
-            Demo Mode - Any credentials will work
-          </p>
+          {isSignUp && (
+            <p className="text-center text-xs text-slate-500 mt-6">
+              注册后请检查邮箱验证链接
+            </p>
+          )}
         </div>
       </motion.div>
     </div>
