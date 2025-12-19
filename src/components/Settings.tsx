@@ -151,26 +151,3 @@ export default function Settings() {
     </div>
   );
 }
-
-// Switch Component
-interface SwitchProps {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function Switch({ checked, onChange }: SwitchProps) {
-  return (
-    <button
-      onClick={() => onChange(!checked)}
-      className={`relative w-14 h-7 rounded-full transition-colors ${
-        checked ? 'bg-purple-600' : 'bg-slate-700'
-      }`}
-    >
-      <motion.div
-        className="absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-lg"
-        animate={{ x: checked ? 28 : 0 }}
-        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-      />
-    </button>
-  );
-}

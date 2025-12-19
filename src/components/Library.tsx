@@ -285,7 +285,7 @@ export default function Library() {
           {/* 瀑布流布局 */}
           <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6">
             <AnimatePresence mode="popLayout">
-              {filteredVideos.map((video, index) => (
+              {filteredVideos.map((video) => (
                 <motion.div
                   key={video.id}
                   layout
