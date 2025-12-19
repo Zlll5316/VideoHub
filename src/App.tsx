@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './components/Login';
@@ -14,9 +15,6 @@ import TeamSpace from './components/TeamSpace';
 function AppContent() {
   return (
     <Routes>
-      {/* 登录页面 - 独立显示，无 Layout */}
-      <Route path="/login" element={<Login />} />
-      
       {/* 其他页面 - 使用 Layout 包裹（包含 Sidebar） */}
       <Route element={<Layout />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -35,10 +33,20 @@ function AppContent() {
 }
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a12] text-slate-200">
       <Router>
-        <AppContent />
+        {!isAuthenticated ? (
+          <Login onLogin={handleLogin} />
+        ) : (
+          <AppContent />
+        )}
       </Router>
     </div>
   );

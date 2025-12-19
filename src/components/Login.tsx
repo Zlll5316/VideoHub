@@ -1,23 +1,26 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail, Lock, LogIn } from 'lucide-react';
+import { Mail, Lock, LogIn, UserPlus } from 'lucide-react';
 
-export default function Login() {
-  const navigate = useNavigate();
+interface LoginProps {
+  onLogin: () => void;
+}
+
+export default function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // 模拟登录请求
+    // 模拟登录/注册请求
     setTimeout(() => {
       setIsLoading(false);
-      // 登录成功，跳转到 Dashboard
-      navigate('/dashboard');
+      // 登录/注册成功，调用 onLogin 回调
+      onLogin();
     }, 1000);
   };
 
@@ -46,7 +49,9 @@ export default function Login() {
           </div>
 
           {/* Welcome Title */}
-          <h2 className="text-2xl font-bold text-white mb-8 text-center">Welcome Back</h2>
+          <h2 className="text-2xl font-bold text-white mb-8 text-center">
+            {isSignUp ? 'Create Account' : 'Welcome Back'}
+          </h2>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -86,7 +91,7 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Sign In Button */}
+            {/* Sign In/Sign Up Button */}
             <motion.button
               type="submit"
               disabled={isLoading}
@@ -97,16 +102,27 @@ export default function Login() {
               {isLoading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Signing In...</span>
+                  <span>{isSignUp ? 'Creating Account...' : 'Signing In...'}</span>
                 </>
               ) : (
                 <>
-                  <LogIn size={20} />
-                  <span>Sign In</span>
+                  {isSignUp ? <UserPlus size={20} /> : <LogIn size={20} />}
+                  <span>{isSignUp ? 'Sign Up' : 'Sign In'}</span>
                 </>
               )}
             </motion.button>
           </form>
+
+          {/* Toggle Sign Up / Sign In */}
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-sm text-slate-400 hover:text-purple-400 transition-colors"
+            >
+              {isSignUp ? '已有账号？去登录' : '没有账号？去注册'}
+            </button>
+          </div>
 
           {/* Footer Text */}
           <p className="text-center text-xs text-slate-500 mt-6">
