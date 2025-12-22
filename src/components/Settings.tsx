@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User, Key, Save } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 type TabType = 'account' | 'api';
 
@@ -11,10 +13,37 @@ const tabs: { id: TabType; label: string; icon: any }[] = [
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState<TabType>('account');
-  const [username, setUsername] = useState('设计师小王');
-  const [email, setEmail] = useState('designer@example.com');
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [username, setUsername] = useState('');
   const [apiKey, setApiKey] = useState('sk-1234567890abcdef');
   const [showApiKey, setShowApiKey] = useState(false);
+
+  useEffect(() => {
+    // 获取当前登录用户
+    const getUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error('获取用户信息失败:', error);
+          setUser(null);
+        } else {
+          setUser(user);
+          // 如果有用户元数据中的用户名，可以设置
+          if (user?.user_metadata?.username) {
+            setUsername(user.user_metadata.username);
+          }
+        }
+      } catch (error) {
+        console.error('获取用户信息异常:', error);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getUser();
+  }, []);
 
   const handleSave = () => {
     // TODO: 实现保存逻辑
@@ -74,29 +103,43 @@ export default function Settings() {
                 >
                   <h2 className="text-2xl font-bold text-white mb-6">账户设置</h2>
                   
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">
-                      用户名
-                    </label>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all backdrop-blur-sm"
-                    />
-                  </div>
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+                    </div>
+                  ) : !user ? (
+                    <div className="text-center py-8">
+                      <p className="text-slate-400">未登录</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">
+                          用户名
+                        </label>
+                        <input
+                          type="text"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="请输入用户名"
+                          className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all backdrop-blur-sm"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">
-                      邮箱地址
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all backdrop-blur-sm"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">
+                          邮箱地址
+                        </label>
+                        <input
+                          type="email"
+                          value={user.email || ''}
+                          disabled
+                          className="w-full px-4 py-3 bg-slate-900/30 border border-slate-700/30 rounded-lg text-slate-400 cursor-not-allowed transition-all backdrop-blur-sm"
+                        />
+                        <p className="text-xs text-slate-500 mt-2">邮箱地址不可修改</p>
+                      </div>
+                    </>
+                  )}
                 </motion.div>
               )}
 
