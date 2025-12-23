@@ -72,11 +72,12 @@ async def analyze(video_id: str):
         print("   2️⃣ 正在呼叫 Gemini AI...")
         
         # ✅ 修复点3：智能选择可用模型（按优先级尝试）
+        # 已验证 gemini-1.5-flash 可用，优先使用
         model = None
         model_names = [
-            'gemini-2.0-flash-exp',  # 最新实验版
-            'gemini-1.5-flash',      # 稳定版
-            'gemini-1.5-pro',        # 专业版
+            'gemini-1.5-flash',      # ✅ 已验证可用，稳定快速
+            'gemini-1.5-pro',        # 专业版（备用）
+            'gemini-2.0-flash-exp',  # 最新实验版（可能不可用）
             'gemini-pro'              # 旧版（可能不可用）
         ]
         
