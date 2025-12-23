@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Plus, FolderOpen, FolderHeart, FolderGit2, Layout } from 'lucide-react';
+import { TrendingUp, Plus, FolderOpen, FolderHeart } from 'lucide-react';
 import { Trend } from '../types';
 
 interface BentoGridProps {
@@ -29,27 +29,6 @@ export default function BentoGrid({ trends, onCollectClick, likedCount = 0, onFa
       icon: FolderHeart,
       color: 'text-red-400',
       count: likedCount,
-    },
-    {
-      id: 'saas',
-      title: 'SaaS 界面灵感',
-      icon: FolderHeart,
-      color: 'text-blue-400',
-      count: 128,
-    },
-    {
-      id: '3d',
-      title: '3D 动效参考',
-      icon: FolderGit2,
-      color: 'text-purple-400',
-      count: 42,
-    },
-    {
-      id: 'landing',
-      title: '落地页设计',
-      icon: Layout,
-      color: 'text-emerald-400',
-      count: 86,
     },
   ];
 
