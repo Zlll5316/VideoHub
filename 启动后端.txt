@@ -1,0 +1,38 @@
+🚀 启动后端服务的步骤：
+
+1. 打开终端（Terminal）
+
+2. 运行以下命令：
+   cd /Users/arui/Desktop/VideoHub_Project
+   python3 main.py
+
+3. 等待看到以下输出：
+   ✅ Google 连接测试通过！
+   INFO:     Uvicorn running on http://0.0.0.0:8000
+
+4. 保持这个终端窗口打开（不要关闭）
+
+5. 刷新浏览器页面
+
+═══════════════════════════════════════
+
+如果遇到问题：
+
+❌ 如果提示 "python3: command not found"
+   尝试使用：python main.py
+
+❌ 如果提示端口被占用
+   运行：lsof -ti:8000 | xargs kill -9
+   然后重新启动
+
+❌ 如果提示模块未找到
+   运行：pip3 install -r requirements.txt
+
+═══════════════════════════════════════
+
+验证后端是否运行：
+
+在另一个终端窗口运行：
+curl http://localhost:8000/health
+
+如果返回 JSON 数据，说明后端正常运行！
