@@ -237,7 +237,7 @@ async def analyze(video_id: str):
                     "message": "未配置 OpenAI API Key。\n\n获取免费 API Key 的步骤：\n1. 访问 https://platform.openai.com/api-keys\n2. 注册账号（新用户有 $5 免费额度，无需信用卡）\n3. 创建 API Key\n4. 在终端运行: export OPENAI_API_KEY='你的API Key'\n5. 重启后端服务"
                 }
             
-                raise Exception(f"OpenAI API 不可用: {error_msg[:100]}")
+            raise Exception(f"OpenAI API 不可用: {error_msg[:100]}")
 
 
 @app.get("/fetch_latest_videos")
@@ -319,13 +319,6 @@ async def fetch_latest_videos():
             "status": "error",
             "message": str(e)
         }
-            
-        except Exception as openai_error:
-            print(f"   ❌ OpenAI API 也失败: {str(openai_error)[:100]}")
-            return {
-                "status": "error", 
-                "message": f"所有 AI API 都不可用。\n\nGemini: 配额已用完\nOpenAI: {str(openai_error)[:150]}\n\n解决方案：\n1. 等待 Gemini 配额恢复（通常几小时到一天）\n2. 或配置 OpenAI API Key（新用户有 $5 免费额度，无需信用卡）\n   访问: https://platform.openai.com/api-keys"
-            }
 
 if __name__ == "__main__":
     # 允许局域网访问，方便调试
