@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import BentoGrid from './BentoGrid';
 import DiscoveryFeed from './DiscoveryFeed';
 import AddVideoModal from './AddVideoModal';
@@ -134,9 +135,11 @@ const convertToVideo = (task: CollectionTask): Video => {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
   const [videos, setVideos] = useState<Video[]>([]);
   const [trends, setTrends] = useState<Trend[]>([]);
+  const [likedCount, setLikedCount] = useState(0); // 收藏数量
 
   // 加载真实数据
   useEffect(() => {
@@ -145,7 +148,17 @@ export default function Dashboard() {
       .filter(task => task.status === 'completed') // 只显示已完成的任务
       .map(convertToVideo);
     
+    // 读取收藏状态
+    const likedVideos = JSON.parse(localStorage.getItem('likedVideos') || '[]');
+    const likedVideoIds = new Set(likedVideos.map((id: string) => String(id)));
+    
+    // 标记已收藏的视频
+    convertedVideos.forEach(video => {
+      video.isLiked = likedVideoIds.has(String(video.id));
+    });
+    
     setVideos(convertedVideos);
+    setLikedCount(likedVideoIds.size);
 
     // 生成趋势数据（基于标签统计）
     const tagCounts: Record<string, number> = {};
@@ -213,7 +226,12 @@ export default function Dashboard() {
           </div>
 
           {/* Bento Grid */}
-          <BentoGrid trends={trends} onCollectClick={handleCollectClick} />
+          <BentoGrid 
+            trends={trends} 
+            onCollectClick={handleCollectClick}
+            likedCount={likedCount}
+            onFavoritesClick={() => navigate('/library?liked=true')}
+          />
 
           {/* Discovery Feed */}
           {discoveryVideos.length > 0 && <DiscoveryFeed videos={discoveryVideos} />}

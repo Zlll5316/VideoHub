@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VideoCategory, VideoType, Video } from '../types';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Flame, Clock, Timer } from 'lucide-react';
 import youtubeData from '../assets/youtube_data.json';
 
@@ -184,6 +184,7 @@ type SortType = 'popular' | 'newest' | 'duration';
 
 export default function Library() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState<VideoCategory | 'all'>('all');
   const [selectedStyle, setSelectedStyle] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<VideoType | 'all'>('all');
@@ -192,12 +193,29 @@ export default function Library() {
   const [sortType, setSortType] = useState<SortType>('popular');
   const [videos, setVideos] = useState<Video[]>([]);
 
+  // 从 URL 参数读取 liked 状态
+  useEffect(() => {
+    const likedParam = searchParams.get('liked');
+    if (likedParam === 'true') {
+      setShowLikedOnly(true);
+    }
+  }, [searchParams]);
+
   // 加载真实数据
   useEffect(() => {
     const tasks = getVideoData();
     const convertedVideos = tasks
       .filter(task => task.status === 'completed') // 只显示已完成的任务
       .map(convertToVideo);
+    
+    // 读取收藏状态
+    const likedVideos = JSON.parse(localStorage.getItem('likedVideos') || '[]');
+    const likedVideoIds = new Set(likedVideos.map((id: string) => String(id)));
+    
+    // 标记已收藏的视频
+    convertedVideos.forEach(video => {
+      video.isLiked = likedVideoIds.has(String(video.id));
+    });
     
     setVideos(convertedVideos);
   }, []);

@@ -25,10 +25,43 @@ export default function VideoDetail() {
   // 从视频封面提取的真实颜色
   const [extractedColors, setExtractedColors] = useState<string[]>([]);
   const [colorsExtracting, setColorsExtracting] = useState(false);
+  
+  // 收藏状态
+  const [isLiked, setIsLiked] = useState(false);
 
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  
+  // 加载收藏状态
+  useEffect(() => {
+    if (id) {
+      const likedVideos = JSON.parse(localStorage.getItem('likedVideos') || '[]');
+      setIsLiked(likedVideos.includes(String(id)));
+    }
+  }, [id]);
+  
+  // 切换收藏状态
+  const toggleLike = () => {
+    if (!id) return;
+    
+    const likedVideos = JSON.parse(localStorage.getItem('likedVideos') || '[]');
+    const videoId = String(id);
+    
+    if (isLiked) {
+      // 取消收藏
+      const newLikedVideos = likedVideos.filter((vid: string) => vid !== videoId);
+      localStorage.setItem('likedVideos', JSON.stringify(newLikedVideos));
+      setIsLiked(false);
+    } else {
+      // 添加收藏
+      if (!likedVideos.includes(videoId)) {
+        likedVideos.push(videoId);
+        localStorage.setItem('likedVideos', JSON.stringify(likedVideos));
+        setIsLiked(true);
+      }
+    }
+  };
 
   const startResizing = useCallback(() => setIsResizing(true), []);
   const stopResizing = useCallback(() => setIsResizing(false), []);
@@ -251,8 +284,29 @@ export default function VideoDetail() {
             <h1 className="text-sm font-bold text-gray-300 truncate max-w-2xl">{title}</h1>
         </div>
         <div className="flex gap-2">
-           <button className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 transition"><Heart className="w-5 h-5" /></button>
-           <button className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 transition"><Share2 className="w-5 h-5" /></button>
+           <button 
+             onClick={toggleLike}
+             className={`p-2 hover:bg-gray-800 rounded-lg transition ${
+               isLiked ? 'text-red-500' : 'text-gray-400'
+             }`}
+             title={isLiked ? '取消收藏' : '收藏'}
+           >
+             <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
+           </button>
+           <button 
+             onClick={async () => {
+               try {
+                 await navigator.clipboard.writeText(window.location.href);
+                 alert('链接已复制到剪贴板');
+               } catch (e) {
+                 alert('复制失败，请手动复制链接');
+               }
+             }}
+             className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 transition"
+             title="分享"
+           >
+             <Share2 className="w-5 h-5" />
+           </button>
         </div>
       </div>
 

@@ -7,6 +7,8 @@ interface BentoGridProps {
   trends: Trend[];
   onCollectClick?: () => void;
   totalVideos?: number;
+  likedCount?: number; // 收藏数量
+  onFavoritesClick?: () => void; // 点击收藏夹的回调
 }
 
 interface CollectionItem {
@@ -17,10 +19,17 @@ interface CollectionItem {
   count: number;
 }
 
-export default function BentoGrid({ trends, onCollectClick }: BentoGridProps) {
+export default function BentoGrid({ trends, onCollectClick, likedCount = 0, onFavoritesClick }: BentoGridProps) {
   const navigate = useNavigate();
 
   const collections: CollectionItem[] = [
+    {
+      id: 'favorites',
+      title: '我的收藏',
+      icon: FolderHeart,
+      color: 'text-red-400',
+      count: likedCount,
+    },
     {
       id: 'saas',
       title: 'SaaS 界面灵感',
@@ -133,7 +142,13 @@ export default function BentoGrid({ trends, onCollectClick }: BentoGridProps) {
                   className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all duration-300 cursor-pointer group"
                   whileHover={{ x: 4, scale: 1.01 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => navigate(`/folder/${collection.id}`)}
+                  onClick={() => {
+                    if (collection.id === 'favorites' && onFavoritesClick) {
+                      onFavoritesClick();
+                    } else {
+                      navigate(`/folder/${collection.id}`);
+                    }
+                  }}
                 >
                   <Icon className={`${collection.color} flex-shrink-0`} size={18} />
                   <span className="flex-1 text-sm font-medium text-slate-200">
