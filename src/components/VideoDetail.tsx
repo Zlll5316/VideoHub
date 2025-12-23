@@ -179,12 +179,12 @@ export default function VideoDetail() {
                 const errorMsg = data.message || "AI 返回错误";
                 console.error('❌ 后端返回错误:', errorMsg);
                 
-                // 检查是否是配额错误
-                let errorDetails = "";
-                if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('Quota')) {
-                    errorDetails = "API 配额已用完。\n\n解决方案：\n1. 等待一段时间后重试（通常需要几分钟到几小时）\n2. 检查 Google AI Studio 的配额限制\n3. 考虑升级到付费计划\n\n错误详情：" + errorMsg.substring(0, 200);
-                } else {
-                    errorDetails = errorMsg;
+                // 错误信息已经由后端格式化，直接使用
+                let errorDetails = errorMsg;
+                
+                // 如果是配额错误，添加更详细的说明
+                if (errorMsg.includes('配额') || errorMsg.includes('quota') || errorMsg.includes('Quota') || errorMsg.includes('429')) {
+                    errorDetails = errorMsg + "\n\n💡 提示：Google Gemini API 免费版有使用限制。如果需要更多配额，可以：\n1. 等待配额重置（通常24小时）\n2. 访问 https://aistudio.google.com/app/apikey 查看配额使用情况\n3. 考虑升级到付费计划";
                 }
                 
                 setAnalysis((prev:any) => ({ 

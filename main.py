@@ -130,8 +130,35 @@ async def analyze(video_id: str):
             }
 
     except Exception as e:
-        print(f"   ❌ AI 报错: {e}")
-        return {"status": "error", "message": str(e)}
+        error_msg = str(e)
+        print(f"   ❌ AI 报错: {error_msg}")
+        
+        # 识别常见的API错误类型
+        if '429' in error_msg or 'quota' in error_msg.lower() or 'Quota' in error_msg:
+            return {
+                "status": "error",
+                "message": "API 配额已用完\n\n可能原因：\n1. 免费配额已用完\n2. 需要升级到付费计划\n\n解决方案：\n1. 访问 https://aistudio.google.com/app/apikey 查看配额\n2. 等待配额重置（通常24小时）\n3. 或升级到付费计划\n\n错误详情：" + error_msg[:200]
+            }
+        elif '403' in error_msg or 'permission' in error_msg.lower():
+            return {
+                "status": "error",
+                "message": "API 权限不足\n\n可能原因：\n1. API Key 无效或已过期\n2. 需要启用 API 服务\n\n解决方案：\n1. 检查 API Key 是否正确\n2. 访问 https://aistudio.google.com/app/apikey 重新生成\n3. 确保已启用 Gemini API"
+            }
+        elif '401' in error_msg or 'unauthorized' in error_msg.lower():
+            return {
+                "status": "error",
+                "message": "API Key 认证失败\n\n解决方案：\n1. 检查 main.py 中的 API_KEY 是否正确\n2. 访问 https://aistudio.google.com/app/apikey 获取新 Key"
+            }
+        elif '404' in error_msg or 'not found' in error_msg.lower():
+            return {
+                "status": "error",
+                "message": "模型不存在或不可用\n\n可能原因：\n1. 模型名称错误\n2. API 版本不匹配\n\n解决方案：\n1. 检查模型名称是否正确\n2. 查看后端日志获取详细信息"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"AI 分析失败\n\n错误: {error_msg[:300]}\n\n建议：\n1. 检查网络连接\n2. 检查代理设置\n3. 查看后端日志获取详细信息"
+            }
 
 @app.get("/fetch_latest_videos")
 async def fetch_latest_videos():
