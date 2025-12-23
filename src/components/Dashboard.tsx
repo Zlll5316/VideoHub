@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import FreshDrops from './FreshDrops';
 import BentoGrid from './BentoGrid';
 import DiscoveryFeed from './DiscoveryFeed';
 import AddVideoModal from './AddVideoModal';
@@ -197,11 +196,8 @@ export default function Dashboard() {
     }
   };
 
-  // Fresh Drops: 显示最新的 8 个视频
-  const freshDrops = videos.slice(0, 8);
-  
-  // Discovery Feed: 显示剩余的视频（打乱顺序）
-  const discoveryVideos = [...videos.slice(8)].sort(() => Math.random() - 0.5);
+  // Discovery Feed: 显示所有视频（打乱顺序）
+  const discoveryVideos = [...videos].sort(() => Math.random() - 0.5);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -215,9 +211,6 @@ export default function Dashboard() {
               实时追踪竞品动态，发现设计灵感 · 已采集 <span className="text-purple-400 font-semibold">{videos.length}</span> 个视频
             </p>
           </div>
-
-          {/* Fresh Drops */}
-          {freshDrops.length > 0 && <FreshDrops videos={freshDrops} />}
 
           {/* Bento Grid */}
           <BentoGrid trends={trends} onCollectClick={handleCollectClick} />
