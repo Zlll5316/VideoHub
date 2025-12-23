@@ -271,15 +271,49 @@ export default function Library() {
     navigate(`/video/${videoId}`);
   };
   
+  // 测试后端连接
+  const testBackendConnection = async () => {
+    try {
+      const response = await fetch(`${API_URL}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        alert(`✅ 后端连接成功！\n\n状态: ${data.status}\n消息: ${data.message}\nAPI地址: ${API_URL}`);
+        return true;
+      } else {
+        alert(`⚠️ 后端响应异常\n\n状态码: ${response.status}\nAPI地址: ${API_URL}\n\n请检查后端服务是否正常运行`);
+        return false;
+      }
+    } catch (error: any) {
+      const errorMsg = error.name === 'AbortError' 
+        ? '连接超时（5秒）'
+        : error.message || '未知错误';
+      
+      alert(`❌ 无法连接到后端服务\n\n错误: ${errorMsg}\nAPI地址: ${API_URL}\n\n🔧 排查步骤：\n1. 确认后端服务正在运行: python main.py\n2. 检查端口 8000 是否被占用\n3. 确认 API 地址是否正确\n4. 查看浏览器控制台获取详细错误信息`);
+      return false;
+    }
+  };
+
   // 更新最新视频
   const handleUpdateVideos = async () => {
     setIsUpdating(true);
     try {
+      // 先测试连接
+      const isConnected = await testBackendConnection();
+      if (!isConnected) {
+        setIsUpdating(false);
+        return;
+      }
+
       const response = await fetch(`${API_URL}/fetch_latest_videos`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: AbortSignal.timeout(60000) // 60秒超时（因为需要搜索多个关键词）
       });
       
       if (!response.ok) {
@@ -336,7 +370,11 @@ export default function Library() {
       }
     } catch (error: any) {
       console.error('更新视频失败:', error);
-      alert(`❌ 更新失败: ${error.message}\n\n请确保后端服务正在运行 (python main.py)`);
+      const errorMsg = error.name === 'AbortError'
+        ? '请求超时（60秒），可能是网络或代理问题'
+        : error.message || '未知错误';
+      
+      alert(`❌ 更新失败: ${errorMsg}\n\nAPI地址: ${API_URL}\n\n🔧 排查步骤：\n1. 确认后端服务正在运行: python main.py\n2. 检查代理设置是否正确（main.py 中的 PROXY_URL）\n3. 查看后端终端日志获取详细错误\n4. 查看完整排查指南: API_TROUBLESHOOTING.md`);
     } finally {
       setIsUpdating(false);
     }
@@ -357,6 +395,16 @@ export default function Library() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                {/* 测试连接按钮 */}
+                <motion.button
+                  onClick={testBackendConnection}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all bg-slate-700/50 text-slate-300 border border-slate-600/50 hover:bg-slate-700 hover:border-slate-600 text-xs"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  title="测试后端连接"
+                >
+                  🔌 测试连接
+                </motion.button>
                 {/* 更新视频按钮 */}
                 <motion.button
                   onClick={handleUpdateVideos}
