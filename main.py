@@ -69,10 +69,16 @@ async def analyze(video_id: str):
 
     # --- 2. AI 分析 ---
     try:
-        print("   2️⃣ 正在呼叫 Gemini Pro (稳定版)...")
+        print("   2️⃣ 正在呼叫 Gemini AI...")
         
-        # ✅ 修复点3：强制使用 gemini-pro，彻底解决 404 问题
-        model = genai.GenerativeModel('gemini-pro')
+        # ✅ 修复点3：使用 gemini-1.5-flash（稳定可用）
+        # 如果失败，尝试 gemini-1.5-pro
+        try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            print("   📡 使用模型: gemini-1.5-flash")
+        except:
+            model = genai.GenerativeModel('gemini-1.5-pro')
+            print("   📡 使用模型: gemini-1.5-pro")
         
         prompt = f"""
         你是一个专业的视频分析师。请分析以下视频字幕，返回纯 JSON 数据。
