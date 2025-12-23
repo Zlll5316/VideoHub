@@ -4,7 +4,7 @@ import BentoGrid from './BentoGrid';
 import DiscoveryFeed from './DiscoveryFeed';
 import AddVideoModal from './AddVideoModal';
 import youtubeData from '../assets/youtube_data.json';
-import { Video, Trend } from '../types';
+import { Video } from '../types';
 
 // TypeScript 类型定义
 interface YouTubeVideo {
@@ -138,7 +138,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
   const [videos, setVideos] = useState<Video[]>([]);
-  const [trends, setTrends] = useState<Trend[]>([]);
+  const [recentVideos, setRecentVideos] = useState<Video[]>([]); // 最近采集的视频
   const [likedCount, setLikedCount] = useState(0); // 收藏数量
 
   // 加载真实数据
@@ -160,38 +160,16 @@ export default function Dashboard() {
     setVideos(convertedVideos);
     setLikedCount(likedVideoIds.size);
 
-    // 生成趋势数据（基于标签统计）
-    const tagCounts: Record<string, number> = {};
-    convertedVideos.forEach(video => {
-      if (video.tags && video.tags.length > 0) {
-        video.tags.forEach(tag => {
-          const cleanTag = tag.replace('#', '').trim();
-          if (cleanTag) {
-            tagCounts[cleanTag] = (tagCounts[cleanTag] || 0) + 1;
-          }
-        });
-      }
-    });
-
-    // 如果标签数据不足，添加默认趋势
-    if (Object.keys(tagCounts).length === 0) {
-      // 基于视频数量生成默认趋势
-      tagCounts['SaaS'] = convertedVideos.length;
-      tagCounts['设计灵感'] = Math.max(1, Math.floor(convertedVideos.length * 0.7));
-      tagCounts['视频分析'] = Math.max(1, Math.floor(convertedVideos.length * 0.5));
-    }
-
-    const trendsData: Trend[] = Object.entries(tagCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([name, count], index) => ({
-        id: `trend-${index}`,
-        name,
-        count,
-        rank: index + 1,
-      }));
-
-    setTrends(trendsData);
+    // 获取最近采集的视频（按创建时间倒序，取前5个）
+    const recent = [...convertedVideos]
+      .sort((a, b) => {
+        const timeA = a.createdAt?.getTime() || 0;
+        const timeB = b.createdAt?.getTime() || 0;
+        return timeB - timeA;
+      })
+      .slice(0, 5);
+    
+    setRecentVideos(recent);
   }, []);
 
   const handleCollectClick = () => {
@@ -239,7 +217,7 @@ export default function Dashboard() {
 
           {/* Bento Grid */}
           <BentoGrid 
-            trends={trends} 
+            recentVideos={recentVideos}
             onCollectClick={handleCollectClick}
             likedCount={likedCount}
             onFavoritesClick={() => navigate('/library?liked=true')}

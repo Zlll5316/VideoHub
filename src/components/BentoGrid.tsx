@@ -1,10 +1,10 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Plus, FolderHeart } from 'lucide-react';
-import { Trend } from '../types';
+import { Clock, Plus, FolderHeart, Play } from 'lucide-react';
+import { Video } from '../types';
 
 interface BentoGridProps {
-  trends: Trend[];
+  recentVideos?: Video[]; // 最近采集的视频
   onCollectClick?: () => void;
   totalVideos?: number;
   likedCount?: number; // 收藏数量
@@ -19,7 +19,7 @@ interface CollectionItem {
   count: number;
 }
 
-export default function BentoGrid({ trends, onCollectClick, likedCount = 0, onFavoritesClick }: BentoGridProps) {
+export default function BentoGrid({ recentVideos = [], onCollectClick, likedCount = 0, onFavoritesClick }: BentoGridProps) {
   const navigate = useNavigate();
 
   const collections: CollectionItem[] = [
@@ -34,49 +34,88 @@ export default function BentoGrid({ trends, onCollectClick, likedCount = 0, onFa
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-      {/* 趋势卡 - 占据 2 列 */}
+      {/* 最近采集卡 - 占据 2 列 */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="premium-card lg:col-span-2 p-8"
       >
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2.5 rounded-lg bg-gradient-to-br from-purple-600/30 to-blue-600/30 border border-purple-500/30 backdrop-blur-sm">
-            <TrendingUp className="text-purple-400" size={24} />
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-gradient-to-br from-purple-600/30 to-blue-600/30 border border-purple-500/30 backdrop-blur-sm">
+              <Clock className="text-purple-400" size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-white">最近采集</h3>
           </div>
-          <h3 className="text-xl font-bold text-white">SaaS 视频流行趋势</h3>
+          {recentVideos.length > 3 && (
+            <button
+              onClick={() => navigate('/library')}
+              className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              查看全部 →
+            </button>
+          )}
         </div>
         <div className="space-y-3">
-          {trends.length > 0 ? (
-            trends.slice(0, 3).map((trend, index) => (
+          {recentVideos.length > 0 ? (
+            recentVideos.slice(0, 3).map((video, index) => (
               <motion.div 
-                key={trend.id} 
-                className="flex items-center justify-between p-4 rounded-lg glass-effect hover:bg-slate-800/60 transition-all duration-300 cursor-pointer group"
+                key={video.id} 
+                className="flex items-center gap-4 p-4 rounded-lg glass-effect hover:bg-slate-800/60 transition-all duration-300 cursor-pointer group"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 + index * 0.05 }}
                 whileHover={{ x: 4, scale: 1.01 }}
-                onClick={() => {
-                  // 跳转到 Library 页面，并自动筛选该标签
-                  navigate(`/library?tag=${encodeURIComponent(trend.name)}`);
-                }}
+                onClick={() => navigate(`/video/${video.id}`)}
               >
-                <div className="flex items-center gap-4">
-                  <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                    index === 0 ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.6)]' :
-                    index === 1 ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)]' :
-                    'bg-slate-700/60 text-slate-300 border border-slate-600/40'
-                  } group-hover:scale-110`}>
-                    {trend.rank}
-                  </span>
-                  <span className="text-white font-medium text-base">{trend.name}</span>
+                {/* 封面缩略图 */}
+                <div className="relative w-20 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-slate-800">
+                  <img 
+                    src={video.coverUrl} 
+                    alt={video.title}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'https://via.placeholder.com/160x90/1e293b/64748b?text=No+Image';
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Play className="w-5 h-5 text-white" />
+                  </div>
                 </div>
-                <span className="text-sm text-slate-400 font-light">{trend.count} 个视频</span>
+                
+                {/* 视频信息 */}
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-semibold text-white mb-1 line-clamp-1 group-hover:text-purple-300 transition-colors">
+                    {video.title}
+                  </h4>
+                  <div className="flex items-center gap-3 text-xs text-slate-400">
+                    {video.duration && (
+                      <span>{Math.floor(video.duration / 60)}:{(video.duration % 60).toFixed(0).padStart(2, '0')}</span>
+                    )}
+                    {video.tags && video.tags.length > 0 && (
+                      <span className="text-purple-400">#{video.tags[0].replace('#', '')}</span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* 箭头指示 */}
+                <div className="text-slate-500 group-hover:text-purple-400 transition-colors">
+                  →
+                </div>
               </motion.div>
             ))
           ) : (
             // 空状态：显示提示信息
             <div className="text-center py-8">
-              <p className="text-slate-400 text-sm mb-2">暂无趋势数据</p>
-              <p className="text-slate-500 text-xs">开始采集视频后，将自动生成流行趋势</p>
+              <p className="text-slate-400 text-sm mb-2">还没有采集任何视频</p>
+              <button
+                onClick={onCollectClick}
+                className="text-purple-400 hover:text-purple-300 text-sm transition-colors"
+              >
+                点击开始采集 →
+              </button>
             </div>
           )}
         </div>
