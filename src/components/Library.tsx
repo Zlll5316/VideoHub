@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VideoCategory, VideoType, Video } from '../types';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Flame, Clock, Timer } from 'lucide-react';
+import { Flame, Clock, Timer, RefreshCw } from 'lucide-react';
 import youtubeData from '../assets/youtube_data.json';
 
 // TypeScript 类型定义
@@ -192,6 +192,10 @@ export default function Library() {
   const [showLikedOnly, setShowLikedOnly] = useState(false);
   const [sortType, setSortType] = useState<SortType>('popular');
   const [videos, setVideos] = useState<Video[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
+  
+  // 获取后端 API URL
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   // 从 URL 参数读取 liked 状态和 tag 参数
   useEffect(() => {
@@ -266,6 +270,77 @@ export default function Library() {
   const handleVideoClick = (videoId: string) => {
     navigate(`/video/${videoId}`);
   };
+  
+  // 更新最新视频
+  const handleUpdateVideos = async () => {
+    setIsUpdating(true);
+    try {
+      const response = await fetch(`${API_URL}/fetch_latest_videos`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.status === 'success' && result.videos && result.videos.length > 0) {
+        // 获取现有数据
+        const existingTasks = getVideoData();
+        const existingIds = new Set(existingTasks.map(t => t.id));
+        
+        // 合并新视频（避免重复）
+        const newVideos = result.videos.filter((v: any) => !existingIds.has(v.id));
+        
+        if (newVideos.length > 0) {
+          // 转换为 CollectionTask 格式
+          const newTasks = newVideos.map((video: any) => ({
+            id: video.id,
+            url: video.videoSource,
+            title: video.videoName,
+            coverUrl: video.coverImage,
+            thumbnail: video.coverImage,
+            duration: video.duration,
+            tags: video.tags,
+            status: 'completed' as const,
+            date: new Date().toLocaleString()
+          }));
+          
+          // 合并到现有数据（新视频放在前面）
+          const updatedTasks = [...newTasks, ...existingTasks];
+          localStorage.setItem('my_video_tasks', JSON.stringify(updatedTasks));
+          
+          // 刷新显示
+          const convertedVideos = updatedTasks
+            .filter(task => task.status === 'completed')
+            .map(convertToVideo);
+          
+          // 读取收藏状态
+          const likedVideos = JSON.parse(localStorage.getItem('likedVideos') || '[]');
+          const likedVideoIds = new Set(likedVideos.map((id: string) => String(id)));
+          convertedVideos.forEach(video => {
+            video.isLiked = likedVideoIds.has(String(video.id));
+          });
+          
+          setVideos(convertedVideos);
+          alert(`✅ 成功更新！新增 ${newVideos.length} 个视频`);
+        } else {
+          alert('📭 没有发现新视频，所有视频都已存在');
+        }
+      } else {
+        throw new Error(result.message || '获取视频失败');
+      }
+    } catch (error: any) {
+      console.error('更新视频失败:', error);
+      alert(`❌ 更新失败: ${error.message}\n\n请确保后端服务正在运行 (python main.py)`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -281,20 +356,37 @@ export default function Library() {
                   通过风格与技法，发现设计灵感 · 共 <span className="text-purple-400 font-semibold">{videos.length}</span> 个视频
                 </p>
               </div>
-              {/* 我喜欢的开关 */}
-              <motion.button
-                onClick={() => setShowLikedOnly(!showLikedOnly)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                  showLikedOnly
-                    ? 'bg-red-500/20 text-red-400 border border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
-                    : 'bg-slate-800/50 text-slate-300 border border-slate-700/50 hover:border-slate-600 hover:bg-slate-800'
-                }`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <span className="text-lg">❤️</span>
-                <span className="text-sm">只看喜欢 (My Likes)</span>
-              </motion.button>
+              <div className="flex items-center gap-3">
+                {/* 更新视频按钮 */}
+                <motion.button
+                  onClick={handleUpdateVideos}
+                  disabled={isUpdating}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    isUpdating
+                      ? 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
+                      : 'bg-purple-600/20 text-purple-400 border border-purple-500/40 hover:bg-purple-600/30 hover:border-purple-500/60'
+                  }`}
+                  whileHover={!isUpdating ? { scale: 1.05 } : {}}
+                  whileTap={!isUpdating ? { scale: 0.95 } : {}}
+                >
+                  <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
+                  <span>{isUpdating ? '更新中...' : '更新视频'}</span>
+                </motion.button>
+                {/* 我喜欢的开关 */}
+                <motion.button
+                  onClick={() => setShowLikedOnly(!showLikedOnly)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    showLikedOnly
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                      : 'bg-slate-800/50 text-slate-300 border border-slate-700/50 hover:border-slate-600 hover:bg-slate-800'
+                  }`}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <span className="text-lg">❤️</span>
+                  <span className="text-sm">只看喜欢 (My Likes)</span>
+                </motion.button>
+              </div>
             </div>
           </div>
 

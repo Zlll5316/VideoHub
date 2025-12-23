@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from youtube_transcript_api import YouTubeTranscriptApi
 import google.generativeai as genai
 import uvicorn
+import yt_dlp
 
 # ==========================================
 # 🚨 1. 网络代理配置
@@ -236,7 +237,88 @@ async def analyze(video_id: str):
                     "message": "未配置 OpenAI API Key。\n\n获取免费 API Key 的步骤：\n1. 访问 https://platform.openai.com/api-keys\n2. 注册账号（新用户有 $5 免费额度，无需信用卡）\n3. 创建 API Key\n4. 在终端运行: export OPENAI_API_KEY='你的API Key'\n5. 重启后端服务"
                 }
             
-            raise Exception(f"OpenAI API 不可用: {error_msg[:100]}")
+                raise Exception(f"OpenAI API 不可用: {error_msg[:100]}")
+
+
+@app.get("/fetch_latest_videos")
+async def fetch_latest_videos():
+    """
+    获取最新的 YouTube 视频
+    搜索关键词：SaaS explainer video, App promo video, UI animation
+    """
+    print("\n🎬 收到获取最新视频请求...")
+    
+    # 搜索关键词
+    queries = [
+        "SaaS explainer video animation",
+        "App promo video motion graphics",
+        "UI animation design",
+        "Product demo video SaaS"
+    ]
+    
+    all_videos = []
+    proxy_url = PROXY_URL
+    
+    ydl_opts = {
+        'skip_download': True,
+        'ignoreerrors': True,
+        'quiet': True,
+        'no_warnings': True,
+        'proxy': proxy_url,
+        'extract_flat': True,
+    }
+    
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            for query in queries:
+                print(f"   正在搜索: {query}...")
+                try:
+                    # 每个关键词搜索前 10 个最新视频
+                    search_results = ydl.extract_info(f"ytsearch10:{query}", download=False)
+                    
+                    if 'entries' in search_results:
+                        for entry in search_results['entries']:
+                            if entry and entry.get('id'):
+                                # 避免重复
+                                if any(v.get('id') == entry.get('id') for v in all_videos):
+                                    continue
+                                
+                                # 生成标签
+                                tags = ['SaaS', 'YouTube', 'Animation']
+                                title_lower = entry.get('title', '').lower()
+                                if 'tutorial' in title_lower or '教程' in title_lower:
+                                    tags.append('#教程')
+                                if 'design' in title_lower or '设计' in title_lower:
+                                    tags.append('#设计')
+                                if '3d' in title_lower:
+                                    tags.append('#3D')
+                                
+                                video_data = {
+                                    'videoName': entry.get('title', 'Untitled'),
+                                    'videoSource': entry.get('url', ''),
+                                    'coverImage': f"https://i.ytimg.com/vi/{entry.get('id')}/maxresdefault.jpg",
+                                    'id': entry.get('id'),
+                                    'duration': entry.get('duration', 0),
+                                    'tags': tags
+                                }
+                                all_videos.append(video_data)
+                                print(f"   ✅ 找到: {video_data['videoName'][:30]}...")
+                except Exception as e:
+                    print(f"   ⚠️ 搜索 {query} 时出错: {e}")
+                    continue
+        
+        print(f"   🎉 共获取 {len(all_videos)} 个新视频")
+        return {
+            "status": "success",
+            "count": len(all_videos),
+            "videos": all_videos
+        }
+    except Exception as e:
+        print(f"   ❌ 获取视频失败: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
             
         except Exception as openai_error:
             print(f"   ❌ OpenAI API 也失败: {str(openai_error)[:100]}")
