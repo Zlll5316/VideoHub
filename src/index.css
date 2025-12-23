@@ -87,3 +87,17 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
 }
+
+/* Shimmer 动画效果 */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
