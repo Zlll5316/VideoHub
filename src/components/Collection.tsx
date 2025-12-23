@@ -41,40 +41,41 @@ export default function Collection() {
   };
 
   return (
-    <div className="p-8 bg-black min-h-screen text-white">
-      {/* 头部 */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-bold">采集任务队列</h2>
-          <span className="bg-gray-800 text-xs px-2 py-1 rounded-full text-gray-400">
-            {tasks.length}
-          </span>
+    <div className="flex-1 overflow-y-auto bg-black min-h-screen text-white">
+      <div className="max-w-7xl mx-auto px-8 py-12">
+        {/* 头部 */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold">采集任务队列</h2>
+            <span className="bg-gray-800 text-xs px-2 py-1 rounded-full text-gray-400">
+              {tasks.length}
+            </span>
+          </div>
         </div>
-      </div>
 
-      {/* 输入框 */}
-      <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 mb-8 flex gap-3">
-        <div className="relative flex-1">
-          <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
-          <input
-            type="text"
-            value={localInput}
-            onChange={(e) => setLocalInput(e.target.value)}
-            placeholder="在此处直接粘贴链接，按回车采集..."
-            className="w-full bg-gray-900 border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition"
-            onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
-          />
+        {/* 输入框 */}
+        <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 mb-8 flex gap-3">
+          <div className="relative flex-1">
+            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
+            <input
+              type="text"
+              value={localInput}
+              onChange={(e) => setLocalInput(e.target.value)}
+              placeholder="在此处直接粘贴链接，按回车采集..."
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+              onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
+            />
+          </div>
+          <button 
+              onClick={handleManualSubmit}
+              className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2"
+          >
+              <Plus className="w-4 h-4" /> 采集
+          </button>
         </div>
-        <button 
-            onClick={handleManualSubmit}
-            className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2"
-        >
-            <Plus className="w-4 h-4" /> 采集
-        </button>
-      </div>
 
-      {/* 列表 */}
-      <div className="space-y-3">
+        {/* 列表 */}
+        <div className="space-y-3">
         {tasks.map((task: any) => {
            const cover = task.coverImage || task.thumbnail || task.coverUrl;
            return (
@@ -134,6 +135,7 @@ export default function Collection() {
             </div>
            );
         })}
+        </div>
       </div>
     </div>
   );
