@@ -12,6 +12,7 @@ import SaaSReport from './components/SaaSReport';
 import Shortcuts from './components/Shortcuts';
 import FolderDetail from './components/FolderDetail';
 import TeamSpace from './components/TeamSpace';
+import TaskDetail from './components/TaskDetail';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -24,6 +25,7 @@ function AppContent() {
         <Route path="/library" element={<Library />} />
         <Route path="/video/:id" element={<VideoDetail />} />
         <Route path="/collection" element={<Collection />} />
+        <Route path="/task-detail/:id" element={<TaskDetail />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/trends" element={<SaaSReport />} />
         <Route path="/shortcuts" element={<Shortcuts />} />

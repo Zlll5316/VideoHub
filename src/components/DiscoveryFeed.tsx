@@ -90,6 +90,20 @@ export default function DiscoveryFeed({ videos }: DiscoveryFeedProps) {
                   )}
                 </div>
 
+                {/* 颜色条 */}
+                {video.analysis?.hexPalette && video.analysis.hexPalette.length > 0 && (
+                  <div className="flex gap-1 mb-4 rounded overflow-hidden">
+                    {video.analysis.hexPalette.slice(0, 4).map((color, index) => (
+                      <div
+                        key={index}
+                        className="flex-1 h-2"
+                        style={{ backgroundColor: color }}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                )}
+
                 {/* Author */}
                 <div className="text-xs text-slate-400 font-light">
                   {video.author} · {new Date(video.createdAt).toLocaleDateString('zh-CN')}

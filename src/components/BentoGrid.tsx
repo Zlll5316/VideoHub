@@ -6,6 +6,7 @@ import { Trend } from '../types';
 interface BentoGridProps {
   trends: Trend[];
   onCollectClick?: () => void;
+  totalVideos?: number;
 }
 
 interface CollectionItem {

@@ -1,223 +1,139 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Download, CheckCircle2, XCircle, Loader2, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Trash2, ExternalLink, Play, Link as LinkIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom'; // 1. 引入
 
-type TaskStatus = 'processing' | 'completed' | 'failed';
-
-interface CollectionTask {
-  id: string;
-  url: string;
-  coverUrl: string;
-  title: string;
-  status: TaskStatus;
-  progress: number;
-}
+// ⚠️ 路径确保正确 (data 或 assets)
+import localJsonData from '../assets/youtube_data.json'; 
 
 export default function Collection() {
-  const [url, setUrl] = useState('');
-  const [tasks, setTasks] = useState<CollectionTask[]>([
-    {
-      id: '1',
-      url: 'https://www.bilibili.com/video/BV1234567890',
-      coverUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=120&fit=crop',
-      title: 'Notion AI 全新功能演示',
-      status: 'processing',
-      progress: 65,
-    },
-    {
-      id: '2',
-      url: 'https://www.youtube.com/watch?v=abc123',
-      coverUrl: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=200&h=120&fit=crop',
-      title: 'Figma 2024 设计系统更新',
-      status: 'completed',
-      progress: 100,
-    },
-    {
-      id: '3',
-      url: 'https://www.douyin.com/video/1234567890',
-      coverUrl: 'https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=200&h=120&fit=crop',
-      title: 'Apple Vision Pro 沉浸式体验',
-      status: 'failed',
-      progress: 0,
-    },
-  ]);
+  const navigate = useNavigate(); // 2. 初始化
+  const [localInput, setLocalInput] = useState('');
+  const [tasks, setTasks] = useState<any[]>([]);
 
-  const handleCollect = () => {
-    if (!url.trim()) return;
-
-    const newTask: CollectionTask = {
-      id: Date.now().toString(),
-      url: url.trim(),
-      coverUrl: 'https://images.unsplash.com/photo-1558655146-364adaf1fcc9?w=200&h=120&fit=crop',
-      title: '正在解析...',
-      status: 'processing',
-      progress: 0,
-    };
-
-    setTasks([newTask, ...tasks]);
-    setUrl('');
-
-    // 模拟进度更新
-    const interval = setInterval(() => {
-      setTasks((prev) =>
-        prev.map((task) =>
-          task.id === newTask.id
-            ? {
-                ...task,
-                progress: Math.min(task.progress + 10, 100),
-                status: task.progress >= 90 ? 'completed' : 'processing',
-                title: task.progress >= 90 ? '采集完成' : task.title,
-              }
-            : task
-        )
-      );
-    }, 500);
-
-    setTimeout(() => clearInterval(interval), 5000);
-  };
-
-  const getStatusIcon = (status: TaskStatus) => {
-    switch (status) {
-      case 'processing':
-        return <Loader2 className="text-blue-400 animate-spin" size={20} />;
-      case 'completed':
-        return <CheckCircle2 className="text-green-400" size={20} />;
-      case 'failed':
-        return <XCircle className="text-red-400" size={20} />;
+  // 初始化数据
+  useEffect(() => {
+    const localStoreData = localStorage.getItem('tasks');
+    let allTasks: any[] = [];
+    if (localStoreData) {
+      try { allTasks = JSON.parse(localStoreData); } catch (e) {}
     }
+    // 合并 JSON 数据
+    if (localJsonData && Array.isArray(localJsonData)) {
+        // 简单去重合并
+        const existingIds = new Set(allTasks.map(t => String(t.id)));
+        const newItems = localJsonData.filter((item: any) => !existingIds.has(String(item.id)));
+        allTasks = [...allTasks, ...newItems];
+    }
+    setTasks(allTasks);
+  }, []);
+
+  // 添加任务逻辑 (模拟)
+  const addNewTask = (url: string) => {
+    // 这里仅做演示，实际应调用后端接口
+    alert(`添加采集任务: ${url}`);
   };
 
-  const getStatusText = (status: TaskStatus) => {
-    switch (status) {
-      case 'processing':
-        return '处理中';
-      case 'completed':
-        return '已完成';
-      case 'failed':
-        return '失败';
+  const handleManualSubmit = () => {
+    if (localInput.trim()) {
+      addNewTask(localInput.trim());
+      setLocalInput('');
     }
   };
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-7xl mx-auto px-8 py-12">
-        {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
-            极速采集工作台
-          </h1>
-          <p className="text-lg text-slate-400 font-light">粘贴链接，一键入库</p>
+    <div className="p-8 bg-black min-h-screen text-white">
+      {/* 头部 */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold">采集任务队列</h2>
+          <span className="bg-gray-800 text-xs px-2 py-1 rounded-full text-gray-400">
+            {tasks.length}
+          </span>
         </div>
+      </div>
 
-        {/* URL Input Section */}
-        <div className="premium-card p-8 mb-12">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleCollect()}
-                placeholder="粘贴 B站、抖音、YouTube、视频号、小红书 链接..."
-                className="w-full px-6 py-4 bg-slate-900/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all backdrop-blur-sm"
-              />
-            </div>
-            <motion.button
-              onClick={handleCollect}
-              disabled={!url.trim()}
-              className="px-8 py-4 bg-purple-600 text-white rounded-xl font-semibold shadow-[0_0_30px_rgba(147,51,234,0.5)] hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+      {/* 输入框 */}
+      <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 mb-8 flex gap-3">
+        <div className="relative flex-1">
+          <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
+          <input
+            type="text"
+            value={localInput}
+            onChange={(e) => setLocalInput(e.target.value)}
+            placeholder="在此处直接粘贴链接，按回车采集..."
+            className="w-full bg-gray-900 border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-blue-500 transition"
+            onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
+          />
+        </div>
+        <button 
+            onClick={handleManualSubmit}
+            className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2"
+        >
+            <Plus className="w-4 h-4" /> 采集
+        </button>
+      </div>
+
+      {/* 列表 */}
+      <div className="space-y-3">
+        {tasks.map((task: any) => {
+           const cover = task.coverImage || task.thumbnail || task.coverUrl;
+           return (
+            <div 
+              key={task.id} 
+              className="bg-gray-900/50 border border-gray-800 p-4 rounded-xl flex items-center gap-4 group hover:border-gray-700 transition"
             >
-              <Download size={20} />
-              开始采集
-            </motion.button>
-          </div>
-        </div>
-
-        {/* Task Queue */}
-        <div>
-          <h2 className="text-2xl font-bold text-white mb-6">采集任务队列</h2>
-          <div className="space-y-4">
-            {tasks.map((task, index) => (
-              <motion.div
-                key={task.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="premium-card p-6"
+              {/* 3. 核心修改：点击封面跳转 */}
+              <div 
+                className="w-40 aspect-video bg-gray-800 rounded-lg overflow-hidden relative shrink-0 cursor-pointer"
+                onClick={() => navigate(`/video/${task.id}`)}
               >
-                <div className="flex gap-6">
-                  {/* Cover Thumbnail */}
-                  <div className="flex-shrink-0">
-                    <div className="w-32 h-20 rounded-lg overflow-hidden border border-slate-700/50">
-                      <img
-                        src={task.coverUrl}
-                        alt={task.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                  {cover ? (
+                     <img src={cover} className="w-full h-full object-cover" />
+                  ) : (
+                     <div className="w-full h-full flex items-center justify-center text-xs text-gray-600">No Cover</div>
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition">
+                     <Play className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition scale-90 group-hover:scale-100" />
                   </div>
-
-                  {/* Task Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-semibold text-white mb-1 truncate">
-                          {task.title}
-                        </h3>
-                        <a
-                          href={task.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-slate-400 hover:text-purple-400 transition-colors flex items-center gap-1 truncate"
-                        >
-                          <ExternalLink size={14} />
-                          {task.url}
-                        </a>
-                      </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        {getStatusIcon(task.status)}
-                        <span className="text-sm text-slate-400">{getStatusText(task.status)}</span>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    {task.status === 'processing' && (
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-slate-400">采集进度</span>
-                          <span className="text-xs text-slate-400">{task.progress}%</span>
-                        </div>
-                        <div className="h-2 bg-slate-800/50 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${task.progress}%` }}
-                            transition={{ duration: 0.3 }}
-                            className="h-full bg-gradient-to-r from-purple-600 to-blue-600 rounded-full"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {task.status === 'failed' && (
-                      <div className="mt-4">
-                        <p className="text-sm text-red-400">采集失败，请检查链接是否正确</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-
-            {tasks.length === 0 && (
-              <div className="premium-card p-12 text-center">
-                <p className="text-slate-400 text-lg">暂无采集任务</p>
-                <p className="text-slate-500 text-sm mt-2">在上方输入链接开始采集</p>
               </div>
-            )}
-          </div>
-        </div>
+
+              <div className="flex-1 min-w-0">
+                {/* 3. 核心修改：点击标题跳转 */}
+                <h3 
+                    className="font-bold text-base mb-2 truncate cursor-pointer hover:text-blue-400 transition"
+                    onClick={() => navigate(`/video/${task.id}`)}
+                >
+                    {task.title || task.videoName}
+                </h3>
+                
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                   <span>{task.collectedAt || '2025/12/22 19:09:53'}</span>
+                   <span className="flex items-center gap-1"><ExternalLink className="w-3 h-3"/> {task.duration || '00:00'}</span>
+                </div>
+
+                <div className="flex gap-2 mt-3">
+                    {task.tags && Array.isArray(task.tags) && task.tags.slice(0,3).map((tag:string, i:number) => (
+                        <span key={i} className="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-xs rounded border border-purple-500/20">
+                            {tag}
+                        </span>
+                    ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition px-2">
+                <button className="p-2 hover:bg-gray-800 rounded text-gray-500 hover:text-red-500 transition">
+                    <Trash2 className="w-4 h-4" />
+                </button>
+                <button 
+                    className="p-2 hover:bg-gray-800 rounded text-gray-400 hover:text-white transition"
+                    onClick={() => navigate(`/video/${task.id}`)}
+                >
+                     <Play className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+           );
+        })}
       </div>
     </div>
   );

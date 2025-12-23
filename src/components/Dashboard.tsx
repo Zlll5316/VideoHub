@@ -1,30 +1,207 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import FreshDrops from './FreshDrops';
 import BentoGrid from './BentoGrid';
 import DiscoveryFeed from './DiscoveryFeed';
-import { mockVideos, mockTrends, mockFreshDrops } from '../data/mockData';
+import AddVideoModal from './AddVideoModal';
+import youtubeData from '../assets/youtube_data.json';
+import { Video, Trend } from '../types';
+
+// TypeScript 类型定义
+interface YouTubeVideo {
+  videoName: string;
+  videoSource: string;
+  coverImage: string;
+  id: string;
+  duration: number;
+  tags: string[];
+}
+
+interface CollectionTask {
+  id: string;
+  url: string;
+  title: string;
+  coverUrl?: string;
+  thumbnail?: string;
+  duration?: number;
+  tags?: string[];
+  status: 'processing' | 'completed' | 'failed';
+  date: string;
+}
+
+// 统一数据获取函数：和 Collection.tsx 保持一致
+const getVideoData = (): CollectionTask[] => {
+  try {
+    const saved = localStorage.getItem('my_video_tasks');
+    const savedTasks = saved ? (JSON.parse(saved) as CollectionTask[]) : [];
+    
+    // 从 JSON 文件获取最新数据
+    const youtubeVideos = youtubeData as YouTubeVideo[];
+    const jsonTasks: CollectionTask[] = youtubeVideos.map((video) => ({
+      id: video.id,
+      url: video.videoSource,
+      title: video.videoName,
+      coverUrl: video.coverImage,
+      thumbnail: video.coverImage,
+      duration: video.duration,
+      tags: video.tags,
+      status: 'completed' as const,
+      date: new Date().toLocaleString()
+    }));
+    
+    // 对比数量：如果 JSON 数据更多，自动覆盖 localStorage
+    if (jsonTasks.length > savedTasks.length) {
+      console.log(`检测到新数据：JSON 有 ${jsonTasks.length} 个视频，localStorage 有 ${savedTasks.length} 个，自动更新...`);
+      localStorage.setItem('my_video_tasks', JSON.stringify(jsonTasks));
+      return jsonTasks;
+    }
+    
+    // 如果 localStorage 有数据且数量不少于 JSON，使用 localStorage
+    if (savedTasks.length > 0) {
+      return savedTasks;
+    }
+    
+    // 如果都没有，使用 JSON 数据
+    return jsonTasks;
+  } catch (e) {
+    console.error('加载任务失败:', e);
+    // 出错时回退到 JSON 数据
+    const youtubeVideos = youtubeData as YouTubeVideo[];
+    return youtubeVideos.map((video) => ({
+      id: video.id,
+      url: video.videoSource,
+      title: video.videoName,
+      coverUrl: video.coverImage,
+      thumbnail: video.coverImage,
+      duration: video.duration,
+      tags: video.tags,
+      status: 'completed' as const,
+      date: new Date().toLocaleString()
+    }));
+  }
+};
+
+// 将 CollectionTask 转换为 Video 格式
+const convertToVideo = (task: CollectionTask): Video => {
+  // 根据标签推断 category
+  const getCategory = (tags: string[]): Video['category'] => {
+    const tagStr = tags.join(' ').toLowerCase();
+    if (tagStr.includes('saas')) return 'saas';
+    if (tagStr.includes('tech') || tagStr.includes('电子')) return 'consumer_tech';
+    if (tagStr.includes('lifestyle') || tagStr.includes('家居')) return 'lifestyle';
+    if (tagStr.includes('motion') || tagStr.includes('动画')) return 'motion_art';
+    if (tagStr.includes('edu') || tagStr.includes('教育')) return 'children_edu';
+    return 'saas'; // 默认
+  };
+
+  // 根据标题推断 type
+  const getType = (title: string): Video['type'] => {
+    const titleLower = title.toLowerCase();
+    if (titleLower.includes('tutorial') || titleLower.includes('教程')) return 'tutorial';
+    if (titleLower.includes('feature') || titleLower.includes('功能')) return 'feature_promo';
+    return 'brand_promo'; // 默认
+  };
+
+  // 根据标签推断 sourceType
+  const getSourceType = (tags: string[]): Video['sourceType'] => {
+    const tagStr = tags.join(' ').toLowerCase();
+    if (tagStr.includes('competitor') || tagStr.includes('竞品')) return 'competitor';
+    return 'reference'; // 默认
+  };
+
+  return {
+    id: task.id,
+    title: task.title,
+    coverUrl: task.coverUrl || task.thumbnail || '',
+    videoUrl: task.url,
+    sourceType: getSourceType(task.tags || []),
+    category: getCategory(task.tags || []),
+    type: getType(task.title),
+    tags: task.tags || [],
+    stats: {
+      views: Math.floor(Math.random() * 200000) + 10000, // 模拟浏览量
+      likes: Math.floor(Math.random() * 5000) + 500, // 模拟点赞数
+    },
+    analysis: {
+      hexPalette: ['#8b5cf6', '#3b82f6', '#0f172a'], // 默认调色板
+      scriptNotes: '',
+      motionNotes: '',
+    },
+    createdAt: new Date(task.date),
+    publishedAt: new Date(task.date),
+    duration: task.duration,
+    sourceUrl: task.url,
+    isLocalFile: false,
+  };
+};
 
 export default function Dashboard() {
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
-  const [collectUrl, setCollectUrl] = useState('');
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [trends, setTrends] = useState<Trend[]>([]);
+
+  // 加载真实数据
+  useEffect(() => {
+    const tasks = getVideoData();
+    const convertedVideos = tasks
+      .filter(task => task.status === 'completed') // 只显示已完成的任务
+      .map(convertToVideo);
+    
+    setVideos(convertedVideos);
+
+    // 生成趋势数据（基于标签统计）
+    const tagCounts: Record<string, number> = {};
+    convertedVideos.forEach(video => {
+      video.tags.forEach(tag => {
+        const cleanTag = tag.replace('#', '');
+        tagCounts[cleanTag] = (tagCounts[cleanTag] || 0) + 1;
+      });
+    });
+
+    const trendsData: Trend[] = Object.entries(tagCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([name, count], index) => ({
+        id: `trend-${index}`,
+        name,
+        count,
+        rank: index + 1,
+      }));
+
+    setTrends(trendsData);
+  }, []);
 
   const handleCollectClick = () => {
+    // 打开采集弹窗
     setIsCollectModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsCollectModalOpen(false);
-    setCollectUrl('');
   };
 
-  const handleStartAnalysis = () => {
-    if (!collectUrl.trim()) return;
-    // TODO: 实现采集逻辑
-    console.log('开始分析:', collectUrl);
-    handleCloseModal();
+  const handleSaveSuccess = () => {
+    // 保存成功后刷新数据
+    const tasks = getVideoData();
+    const convertedVideos = tasks
+      .filter(task => task.status === 'completed')
+      .map(convertToVideo);
+    setVideos(convertedVideos);
   };
+
+  const handleQuickCollect = (url: string) => {
+    // 快速采集：使用 window.location.href 强制跳转
+    if (url && url.trim()) {
+      window.location.href = '/collection?newUrl=' + encodeURIComponent(url.trim());
+    } else {
+      window.location.href = '/collection';
+    }
+  };
+
+  // Fresh Drops: 显示最新的 8 个视频
+  const freshDrops = videos.slice(0, 8);
+  
+  // Discovery Feed: 显示剩余的视频（打乱顺序）
+  const discoveryVideos = [...videos.slice(8)].sort(() => Math.random() - 0.5);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -34,95 +211,28 @@ export default function Dashboard() {
             <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
               灵感监控中心
             </h1>
-            <p className="text-lg text-slate-400 font-light">实时追踪竞品动态，发现设计灵感</p>
+            <p className="text-lg text-slate-400 font-light">
+              实时追踪竞品动态，发现设计灵感 · 已采集 <span className="text-purple-400 font-semibold">{videos.length}</span> 个视频
+            </p>
           </div>
 
           {/* Fresh Drops */}
-          {mockFreshDrops.length > 0 && <FreshDrops videos={mockFreshDrops} />}
+          {freshDrops.length > 0 && <FreshDrops videos={freshDrops} />}
 
           {/* Bento Grid */}
-          <BentoGrid trends={mockTrends} onCollectClick={handleCollectClick} />
+          <BentoGrid trends={trends} onCollectClick={handleCollectClick} />
 
           {/* Discovery Feed */}
-          <DiscoveryFeed videos={mockVideos} />
+          {discoveryVideos.length > 0 && <DiscoveryFeed videos={discoveryVideos} />}
         </div>
 
         {/* 采集弹窗 */}
-        <AnimatePresence>
-          {isCollectModalOpen && (
-            <>
-              {/* 背景遮罩 */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={handleCloseModal}
-                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-              />
-              
-              {/* 弹窗内容 */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="w-full max-w-2xl backdrop-blur-xl bg-slate-900/80 border border-white/10 rounded-xl shadow-[0_0_40px_rgba(147,51,234,0.2)] p-8 relative">
-                  {/* 关闭按钮 */}
-                  <button
-                    onClick={handleCloseModal}
-                    className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
-
-                  {/* 标题 */}
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-600/30 to-blue-600/30 border border-purple-500/30">
-                      <Sparkles className="text-purple-400" size={24} />
-                    </div>
-                    <h2 className="text-2xl font-bold text-white">极速灵感采集</h2>
-                  </div>
-
-                  {/* URL 输入框 */}
-                  <div className="mb-6">
-                    <input
-                      type="text"
-                      value={collectUrl}
-                      onChange={(e) => setCollectUrl(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleStartAnalysis()}
-                      placeholder="粘贴视频/文章链接..."
-                      className="w-full px-6 py-4 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all backdrop-blur-sm text-lg"
-                      autoFocus
-                    />
-                  </div>
-
-                  {/* 按钮组 */}
-                  <div className="flex gap-4 justify-end">
-                    <motion.button
-                      onClick={handleCloseModal}
-                      className="px-6 py-3 bg-slate-800/50 text-slate-300 rounded-lg font-medium hover:bg-slate-800 transition-all border border-slate-700/50"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      取消
-                    </motion.button>
-                    <motion.button
-                      onClick={handleStartAnalysis}
-                      disabled={!collectUrl.trim()}
-                      className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold shadow-[0_0_20px_rgba(147,51,234,0.5)] hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                      whileHover={{ scale: collectUrl.trim() ? 1.05 : 1 }}
-                      whileTap={{ scale: collectUrl.trim() ? 0.95 : 1 }}
-                    >
-                      开始分析
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+        <AddVideoModal
+          isOpen={isCollectModalOpen}
+          onClose={handleCloseModal}
+          onSuccess={handleSaveSuccess}
+          onQuickCollect={handleQuickCollect}
+        />
     </div>
   );
 }

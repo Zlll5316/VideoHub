@@ -1,86 +1,128 @@
-# VideoHub - 灵感监控中心
+# VideoHub Project
 
-基于 PRD 文档构建的竞品视频监控与分析平台。
+一个专业的视频灵感管理与分析平台，支持视频采集、AI 分析、团队协作等功能。
 
-## 技术栈
+## ✨ 功能特性
 
-- **Vite** - 构建工具
-- **React 18** - UI 框架
-- **TypeScript** - 类型系统
-- **Tailwind CSS** - 样式管理
-- **lucide-react** - 图标库
-- **framer-motion** - 动画库
+- 🎬 **视频采集**: 支持 YouTube 链接快速采集，自动提取元数据和颜色
+- 🤖 **AI 分析**: 使用真实 AI（Gemini/OpenAI）分析视频视觉风格、动效节奏、脚本结构
+- 🎨 **颜色提取**: 从视频封面真实提取配色方案
+- 📚 **智能库**: 多维度筛选、排序、瀑布流展示
+- 👥 **团队协作**: 团队空间、成员管理、共享资源
+- 🔍 **全局搜索**: 快速查找视频和内容
 
-## 项目结构
+## 🚀 快速开始
 
-```
-src/
-├── components/          # React 组件
-│   ├── Dashboard.tsx    # 主仪表盘页面
-│   ├── Sidebar.tsx      # 左侧导航栏
-│   ├── FreshDrops.tsx   # Fresh Drops 横向滚动区域
-│   ├── BentoGrid.tsx    # Bento Grid 功能网格
-│   └── DiscoveryFeed.tsx # 瀑布流猜你喜欢
-├── data/               # Mock 数据
-│   └── mockData.ts
-├── types/              # TypeScript 类型定义
-│   └── index.ts
-├── App.tsx             # 根组件
-├── main.tsx            # 入口文件
-└── index.css           # 全局样式
-```
+### 本地开发
 
-## 安装依赖
+1. **安装依赖**
+   ```bash
+   npm install
+   ```
 
-```bash
-npm install
-```
+2. **配置环境变量**
+   ```bash
+   cp env.example .env
+   # 编辑 .env 文件，填入你的配置
+   ```
 
-## 开发
+3. **启动前端**
+   ```bash
+   npm run dev
+   # 访问 http://localhost:5173
+   ```
 
-```bash
-npm run dev
-```
+4. **启动后端**
+   ```bash
+   python main.py
+   # 后端运行在 http://localhost:8000
+   ```
 
-## 构建
+### 构建生产版本
 
 ```bash
 npm run build
+# 构建后的文件在 dist/ 目录
 ```
 
-## 预览构建结果
+## 📦 部署
+
+详细部署指南请查看 [DEPLOY.md](./DEPLOY.md)
+
+### 快速部署到 Vercel
 
 ```bash
-npm run preview
+# 安装 Vercel CLI
+npm i -g vercel
+
+# 部署
+vercel
 ```
 
-## 设计规范
+### 快速部署到 Netlify
 
-- **主题**: 沉浸式深色模式 (Immersive Dark Mode)
-- **背景色**: slate-950 (#020617)
-- **文字色**: slate-50 (#f8fafc)
-- **主色调**: 
-  - Neon Purple (#8b5cf6) - 按钮、高亮状态
-  - Electric Blue (#3b82f6) - 参考类标签
-- **圆角**: rounded-xl (大圆角)
-- **质感**: 微弱边框 (border-slate-800)，Hover 时发光效果
+```bash
+# 安装 Netlify CLI
+npm i -g netlify-cli
 
-## 功能特性
+# 部署
+netlify deploy --prod --dir=dist
+```
 
-### 首页 - 灵感监控中心
+## 🔧 技术栈
 
-1. **左侧侧边栏**: 包含仪表盘、情报库、采集、标签管理等菜单
-2. **Fresh Drops**: 横向滚动的竞品速递区域，展示近 24 小时内的新视频
-3. **Bento Grid**: 功能网格布局
-   - 趋势卡：显示 SaaS 视频流行趋势
-   - 采集卡：一键录入链接
-   - 入口卡：快速跳转到收藏夹
-4. **猜你喜欢**: 瀑布流风格的视频推荐
+- **前端**: React 18 + TypeScript + Vite + Tailwind CSS
+- **后端**: Python + FastAPI + Uvicorn
+- **数据库**: Supabase (PostgreSQL)
+- **AI 分析**: Google Gemini API / OpenAI API
+- **动画**: Framer Motion
+- **图标**: Lucide React
 
-## 下一步开发
+## 📝 环境变量
 
-- [ ] 实现视频详情拆解台
-- [ ] 实现极速采集录入功能
-- [ ] 实现标签管理体系
-- [ ] 对接 API 实现竞品自动抓取
-- [ ] 实现脚本自动拆解与视觉风格自动识别
+创建 `.env` 文件：
+
+```bash
+# Supabase 配置
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_KEY=your-supabase-key
+
+# 后端 API 地址（部署后改为实际的后端 URL）
+VITE_API_URL=http://localhost:8000
+```
+
+## 🎨 设计规范
+
+- **主题**: 沉浸式深色模式
+- **背景色**: slate-950
+- **主色调**: 霓虹紫 (#8b5cf6) + 电光蓝 (#3b82f6)
+- **风格**: 磨砂玻璃、发光边框、平滑动画
+
+## 📁 项目结构
+
+```
+VideoHub_Project/
+├── src/                    # 前端代码
+│   ├── components/        # React 组件
+│   ├── lib/               # 工具库（Supabase 等）
+│   ├── assets/            # 静态资源
+│   └── types/             # TypeScript 类型
+├── main.py                # 后端 FastAPI 服务
+├── requirements.txt       # Python 依赖
+├── dist/                  # 构建输出（运行 npm run build 后）
+└── DEPLOY.md              # 部署指南
+```
+
+## 🔑 API 配置
+
+### Gemini API（主要）
+- 在 `main.py` 中配置 `API_KEY`
+- 如果配额用完，会自动切换到 OpenAI
+
+### OpenAI API（备选）
+- 设置环境变量：`export OPENAI_API_KEY='你的Key'`
+- 新用户有 $5 免费额度，无需信用卡
+
+## 📄 许可证
+
+MIT

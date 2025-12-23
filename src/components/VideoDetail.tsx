@@ -1,916 +1,528 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Play, Pause, SkipBack, SkipForward, Heart, Link as LinkIcon, ExternalLink, Bookmark, Share2, Download, Globe, X, User, Building2, ChevronDown, ChevronUp, Plus, Check } from 'lucide-react';
-import { mockVideos } from '../data/mockData';
-
-type TabType = 'visual' | 'motion' | 'script';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Heart, Share2, Loader2, Activity, Layers, AlertCircle } from 'lucide-react';
+import { Palette } from 'color-thief-react';
+import localJsonData from '../assets/youtube_data.json'; 
 
 export default function VideoDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [activeTab, setActiveTab] = useState<TabType>('visual');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [isLiked, setIsLiked] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [video, setVideo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'visual' | 'motion' | 'script'>('visual');
   
-  // 收藏弹窗状态
-  const [saveToPersonal, setSaveToPersonal] = useState(false);
-  const [saveToTeam, setSaveToTeam] = useState(false);
-  const [selectedPersonalFolder, setSelectedPersonalFolder] = useState<string | null>(null);
-  const [selectedTeamFolder, setSelectedTeamFolder] = useState<string | null>(null);
-  const [creatingFolderLocation, setCreatingFolderLocation] = useState<'personal' | 'team' | null>(null);
-  const [newFolderName, setNewFolderName] = useState('');
+  // 获取后端 API URL（从环境变量或使用默认值）
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
   
-  // Mock 文件夹数据
-  const personalFolders = [
-    { id: 'p1', name: '我的收藏夹', count: 12 },
-    { id: 'p2', name: 'SaaS 界面灵感', count: 8 },
-    { id: 'p3', name: '3D 动效参考', count: 5 },
-  ];
-  
-  const teamFolders = [
-    { id: 't1', name: '团队共享库', count: 24 },
-    { id: 't2', name: '设计参考', count: 15 },
-    { id: 't3', name: '竞品分析', count: 9 },
-  ];
-
-  // 查找视频数据
-  const video = mockVideos.find(v => v.id === id);
-  
-  // 初始化 isLiked 状态
-  useEffect(() => {
-    if (video?.isLiked) {
-      setIsLiked(true);
-    }
-  }, [video]);
-
-  if (!video) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-slate-400 text-lg mb-4">视频不存在</p>
-          <button
-            onClick={() => navigate('/library')}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            返回情报库
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 生成关键帧故事板（模拟8-12张关键画面）
-  const keyFrames = Array.from({ length: 10 }, (_, i) => {
-    const seconds = i * 2;
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return {
-      id: `frame-${i}`,
-      time: `${minutes}:${String(secs).padStart(2, '0')}`,
-      thumbnail: video.coverUrl, // 实际应该从视频中提取
-    };
+  const [analysis, setAnalysis] = useState<any>({
+    visual: { style: "等待分析...", status: 'idle' },
+    motion: { analysis: "等待分析...", status: 'idle' },
+    script: { structure: [], status: 'idle' },
+    status: 'idle', 
+    notes: "准备连接 AI..."
   });
+  
+  // 从视频封面提取的真实颜色
+  const [extractedColors, setExtractedColors] = useState<string[]>([]);
+  const [colorsExtracting, setColorsExtracting] = useState(false);
 
-  const tabs: { id: TabType; label: string }[] = [
-    { id: 'visual', label: '视觉分析' },
-    { id: 'motion', label: '动效笔记' },
-    { id: 'script', label: '脚本结构' },
-  ];
+  const [sidebarWidth, setSidebarWidth] = useState(400);
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
-  // 获取源站名称
-  const getSourceName = (url?: string) => {
-    if (!url) return '本地文件';
-    if (url.includes('youtube.com') || url.includes('youtu.be')) return 'YouTube';
-    if (url.includes('vimeo.com')) return 'Vimeo';
-    return '外部链接';
-  };
-
-  // Toast 提示
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
-
-  // 处理收藏按钮点击
-  const handleSaveClick = () => {
-    setIsSaveModalOpen(true);
-  };
-
-  // 处理保存确认
-  const handleSaveConfirm = () => {
-    if (!saveToPersonal && !saveToTeam) return;
-    
-    setIsSaved(true);
-    setIsSaveModalOpen(false);
-    
-    // 重置状态
-    setSaveToPersonal(false);
-    setSaveToTeam(false);
-    setSelectedPersonalFolder(null);
-    setSelectedTeamFolder(null);
-    setCreatingFolderLocation(null);
-    setNewFolderName('');
-    
-    showToast('Successfully saved to selected locations.');
-  };
-
-  // 处理新建文件夹
-  const handleCreateFolder = (location: 'personal' | 'team') => {
-    if (!newFolderName.trim()) return;
-    
-    // TODO: 实际创建文件夹逻辑
-    console.log(`创建${location === 'personal' ? '个人' : '团队'}文件夹:`, newFolderName);
-    
-    // 模拟创建后自动选中
-    if (location === 'personal') {
-      const newId = `p${Date.now()}`;
-      setSelectedPersonalFolder(newId);
-      setSaveToPersonal(true);
-    } else {
-      const newId = `t${Date.now()}`;
-      setSelectedTeamFolder(newId);
-      setSaveToTeam(true);
+  const startResizing = useCallback(() => setIsResizing(true), []);
+  const stopResizing = useCallback(() => setIsResizing(false), []);
+  const resize = useCallback((mouseEvent: MouseEvent) => {
+    if (isResizing) {
+      const newWidth = window.innerWidth - mouseEvent.clientX;
+      if (newWidth > 300 && newWidth < 800) setSidebarWidth(newWidth);
     }
-    
-    setNewFolderName('');
-    setCreatingFolderLocation(null);
-  };
+  }, [isResizing]);
 
-  // 获取保存按钮文字
-  const getSaveButtonText = () => {
-    if (!saveToPersonal && !saveToTeam) return 'Save';
-    if (saveToPersonal && saveToTeam) return 'Save to Both';
-    if (saveToPersonal) return 'Save to Personal';
-    return 'Save to Team';
-  };
-
-  // 处理分享
-  const handleShare = async () => {
-    const currentUrl = `${window.location.origin}${location.pathname}`;
-    try {
-      await navigator.clipboard.writeText(currentUrl);
-      showToast('分析页链接已复制，可分享给团队成员');
-    } catch (err) {
-      showToast('复制失败，请手动复制链接');
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", resize);
+      window.addEventListener("mouseup", stopResizing);
     }
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
+
+  useEffect(() => {
+    let allTasks: any[] = [];
+    const localStoreData = localStorage.getItem('tasks');
+    if (localStoreData) { try { allTasks = JSON.parse(localStoreData); } catch (e) {} }
+    if (localJsonData && Array.isArray(localJsonData)) { allTasks = [...allTasks, ...localJsonData]; }
+    const uniqueTasksMap = new Map();
+    allTasks.forEach((item: any) => { uniqueTasksMap.set(String(item.id), item); });
+    const foundVideo = uniqueTasksMap.get(String(id));
+    if (foundVideo) { setVideo(foundVideo); setLoading(false); } else { setLoading(false); }
+  }, [id]);
+
+  // 🔥 核心：请求 Python 后端（带重试机制和健康检查）
+  useEffect(() => {
+    if (!id) return;
+
+    const checkBackendHealth = async (): Promise<boolean> => {
+      try {
+        const response = await fetch(`${API_URL}/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000) // 5秒超时
+        });
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ 后端健康检查通过:', data);
+          return true;
+        }
+        return false;
+      } catch (e) {
+        console.warn('⚠️ 后端健康检查失败:', e);
+        return false;
+      }
+    };
+
+    const fetchRealData = async (retryCount = 0) => {
+        const maxRetries = 2;
+        setAnalysis((prev:any) => ({ 
+          ...prev, 
+          status: 'loading', 
+          notes: retryCount > 0 ? `正在重试连接... (${retryCount}/${maxRetries})` : "正在连接 Python 后端..." 
+        }));
+
+        try {
+            // 先检查后端健康状态
+            if (retryCount === 0) {
+              console.log('🔍 检查后端健康状态...');
+              const isHealthy = await checkBackendHealth();
+              if (!isHealthy) {
+                throw new Error('BACKEND_NOT_RUNNING');
+              }
+            }
+
+            console.log(`🔍 开始分析视频 ID: ${id}`);
+            console.log(`📡 请求地址: ${API_URL}/analyze_video?video_id=${id}`);
+            
+            // 请求后端 API，设置超时
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+            
+            const response = await fetch(`${API_URL}/analyze_video?video_id=${id}`, {
+              signal: controller.signal,
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+              }
+            });
+            
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ 后端返回数据:', data);
+
+            if (data.status === 'success') {
+                // ✅ 修复点：直接使用对象，不要再 JSON.parse 了
+                const aiData = data.ai_result;
+                
+                // 注意：不再使用 AI 返回的配色，而是从视频封面真实提取
+                setAnalysis({
+                    visual: { 
+                        style: aiData.visual_style || "未识别到风格", 
+                        status: 'done'
+                    },
+                    motion: { analysis: aiData.motion_analysis || "未识别到动效", status: 'done' },
+                    script: { structure: aiData.script_structure || [], status: 'done' },
+                    status: 'success',
+                    notes: "AI 分析成功"
+                });
+                console.log('✅ AI 分析完成并已更新状态');
+            } else {
+                // 处理错误状态，确保错误信息能正确显示
+                const errorMsg = data.message || "AI 返回错误";
+                console.error('❌ 后端返回错误:', errorMsg);
+                
+                // 检查是否是配额错误
+                let errorDetails = "";
+                if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('Quota')) {
+                    errorDetails = "API 配额已用完。\n\n解决方案：\n1. 等待一段时间后重试（通常需要几分钟到几小时）\n2. 检查 Google AI Studio 的配额限制\n3. 考虑升级到付费计划\n\n错误详情：" + errorMsg.substring(0, 200);
+                } else {
+                    errorDetails = errorMsg;
+                }
+                
+                setAnalysis((prev:any) => ({ 
+                    ...prev, 
+                    status: 'error', 
+                    notes: "AI 分析失败",
+                    errorDetails: errorDetails
+                }));
+                return; // 直接返回，不再抛出错误
+            }
+        } catch (e: any) {
+            console.error("❌ 连接失败:", e);
+            
+            // 如果是网络错误且还有重试次数，则重试
+            if (retryCount < maxRetries && (e.name === 'TypeError' || e.name === 'AbortError')) {
+              console.log(`🔄 准备重试 (${retryCount + 1}/${maxRetries})...`);
+              setTimeout(() => {
+                fetchRealData(retryCount + 1);
+              }, 2000); // 2秒后重试
+              return;
+            }
+            
+            // 最终失败，显示详细的错误信息
+            let errorMessage = "连接失败！";
+            let errorDetails = "";
+            
+            if (e.message === 'BACKEND_NOT_RUNNING') {
+              errorMessage = "后端服务未运行";
+              errorDetails = "请按照以下步骤操作：\n1. 打开终端，进入项目目录\n2. 运行命令: python main.py\n3. 等待看到 '✅ Google 连接测试通过！后端服务准备就绪。'\n4. 刷新此页面";
+            } else if (e.name === 'AbortError') {
+              errorMessage = "请求超时（30秒）";
+              errorDetails = "后端响应时间过长。可能是网络问题或代理配置错误。";
+            } else if (e.message?.includes('Failed to fetch') || e.name === 'TypeError') {
+              errorMessage = "无法连接到后端服务";
+              errorDetails = `请确保：\n1. Python 后端 (main.py) 正在运行\n2. 后端运行在 ${API_URL}\n3. 检查终端是否有错误信息`;
+            } else {
+              errorMessage = `错误: ${e.message || e.toString()}`;
+              errorDetails = "请查看浏览器控制台获取详细错误信息";
+            }
+            
+            setAnalysis((prev:any) => ({ 
+                ...prev, 
+                status: 'error', 
+                notes: errorMessage,
+                errorDetails: errorDetails
+            }));
+        }
+    };
+
+    fetchRealData();
+  }, [id]);
+
+  if (loading) return <div className="p-10 flex items-center justify-center text-white">加载中...</div>;
+  if (!video) return <div className="p-10 text-white">视频未找到 ID: {id}</div>;
+
+  const title = video.title || video.videoName || "无标题";
+  const videoUrl = video.url || video.videoSource;
+  const tags = video.tags || ['SaaS', 'Demo'];
+  // 获取封面图 URL
+  const coverImageUrl = video.coverUrl || video.coverImage || `https://img.youtube.com/vi/${id}/maxresdefault.jpg`;
+  
+  // 优先使用视频数据中保存的颜色，如果没有则使用提取的颜色
+  const displayColors: string[] = Array.isArray(video?.colors) ? video.colors 
+    : Array.isArray(video?.analysis?.hexPalette) ? video.analysis.hexPalette 
+    : Array.isArray(extractedColors) ? extractedColors 
+    : [];
+
+  const getEmbedUrl = (url: string) => {
+    if (!url) return '';
+    if (url.includes('embed')) return url;
+    try { const vId = url.split('v=')[1]?.split('&')[0] || url.split('/').pop(); if (vId) return `https://www.youtube.com/embed/${vId}`; } catch (e) { return url; }
+    return url;
   };
 
-  // 处理下载/访问源站
-  const handleDownloadOrSource = () => {
-    if (video?.isLocalFile) {
-      // 本地上传文件，触发下载
-      showToast('开始下载视频...');
-    } else if (video?.sourceUrl) {
-      // 外部链接，在新标签页打开
-      window.open(video.sourceUrl, '_blank');
-    }
-  };
+  const TabButton = ({ name, label, icon }: { name: typeof activeTab, label: string, icon?: React.ReactNode }) => (
+    <button onClick={() => setActiveTab(name)} className={`flex-1 flex items-center justify-center py-4 text-sm font-medium border-b-2 transition-all ${activeTab === name ? 'border-blue-500 text-blue-400 bg-gray-900' : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-900/50'}`}>
+      {icon} <span className={icon ? "ml-2" : ""}>{label}</span>
+    </button>
+  );
+
+  const AnalysisSection = ({ title, children, loading=false }: any) => (
+      <section className="border-b border-gray-800 pb-6 last:border-0 last:pb-0">
+          <div className="flex items-center justify-between mb-4">
+              <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">{title}</h4>
+              {loading && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
+          </div>
+          {children}
+      </section>
+  );
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-950">
-      <div className="max-w-[1920px] mx-auto px-8 py-8">
-        {/* Header with Back Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => navigate('/library')}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-4"
-          >
-            <ArrowLeft size={20} />
-            <span className="text-sm font-medium">返回情报库</span>
-          </button>
-          <h1 className="text-3xl font-bold text-white mb-2">{video.title}</h1>
-          <div className="flex items-center gap-4 text-sm text-slate-400 mb-3">
-            <span>{video.author}</span>
-            <span>·</span>
-            <span>{new Date(video.createdAt).toLocaleDateString('zh-CN')}</span>
-            <span>·</span>
-            <span>{video.stats.views.toLocaleString()} 次观看</span>
+    <div className={`flex flex-col bg-black text-white font-sans w-full h-[calc(100vh-20px)] overflow-hidden ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
+      <div className="h-14 px-6 border-b border-gray-800 flex justify-between items-center bg-black shrink-0">
+        <div className="flex items-center gap-4 flex-1">
+            <button onClick={() => navigate(-1)} className="flex items-center text-gray-400 hover:text-white transition"><ArrowLeft className="w-5 h-5 mr-2" /><span className="font-medium">返回</span></button>
+            <div className="h-4 w-px bg-gray-800 mx-2"></div>
+            <h1 className="text-sm font-bold text-gray-300 truncate max-w-2xl">{title}</h1>
+        </div>
+        <div className="flex gap-2">
+           <button className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 transition"><Heart className="w-5 h-5" /></button>
+           <button className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 transition"><Share2 className="w-5 h-5" /></button>
+        </div>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 bg-gray-950 flex flex-col relative overflow-y-auto min-w-[400px]">
+          <div className="w-full bg-black shadow-2xl relative shrink-0 border-b border-gray-800">
+            <div className="w-full aspect-video max-h-[70vh]">
+                <iframe src={getEmbedUrl(videoUrl)} title={title} className={`w-full h-full ${isResizing ? 'pointer-events-none' : ''}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+            </div>
           </div>
-          {/* 原始链接展示 */}
-          {video.sourceUrl && (
-            <motion.a
-              href={video.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-slate-300 hover:text-white hover:border-purple-500/50 transition-all group"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <LinkIcon size={16} className="text-purple-400" />
-              <span className="text-sm font-medium">Source: {getSourceName(video.sourceUrl)}</span>
-              <ExternalLink size={14} className="text-slate-500 group-hover:text-purple-400 transition-colors" />
-            </motion.a>
-          )}
+          <div className="p-8 flex-1">
+            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center"><Layers className="w-4 h-4 mr-2"/> Keyframe Storyboard</h3>
+             <div className="grid grid-cols-4 gap-4">
+                <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"><img src={`https://img.youtube.com/vi/${String(id)}/1.jpg`} className="w-full h-full object-cover opacity-80"/></div>
+                <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"><img src={`https://img.youtube.com/vi/${String(id)}/2.jpg`} className="w-full h-full object-cover opacity-80"/></div>
+                <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"><img src={`https://img.youtube.com/vi/${String(id)}/3.jpg`} className="w-full h-full object-cover opacity-80"/></div>
+                <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"><img src={`https://img.youtube.com/vi/${String(id)}/0.jpg`} className="w-full h-full object-cover opacity-80"/></div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">* 关键帧由 YouTube 自动生成。</p>
+          </div>
         </div>
 
-        {/* Main Content - Two Column Layout */}
-        <div className="flex gap-6">
-          {/* Left Column - 70% */}
-          <div className="flex-[7] space-y-6">
-            {/* Video Player */}
-            <div className="premium-card overflow-hidden shadow-[0_0_40px_rgba(147,51,234,0.3)]">
-              <div className="relative aspect-video bg-slate-900 flex items-center justify-center">
-                {/* Video Placeholder */}
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-                  <img
-                    src={video.coverUrl}
-                    alt={video.title}
-                    className="w-full h-full object-cover opacity-50"
-                  />
-                </div>
-                
-                {/* Play Button Overlay */}
-                <div className="relative z-10 flex flex-col items-center gap-4">
-                  <motion.button
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    className="w-20 h-20 rounded-full bg-purple-600/90 backdrop-blur-sm flex items-center justify-center border-2 border-purple-400/50 shadow-[0_0_30px_rgba(147,51,234,0.6)] hover:bg-purple-600 transition-all"
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {isPlaying ? (
-                      <Pause className="text-white" size={32} fill="white" />
-                    ) : (
-                      <Play className="text-white ml-1" size={32} fill="white" />
-                    )}
-                  </motion.button>
-                  <p className="text-slate-300 text-sm">点击播放视频</p>
-                </div>
+        <div className="w-[4px] bg-gray-900 hover:bg-blue-500 cursor-col-resize hover:w-[6px] transition-all duration-150 z-50 flex flex-col justify-center items-center group relative border-l border-gray-800" onMouseDown={startResizing}>
+            <div className="h-8 w-1 bg-gray-700 rounded-full group-hover:bg-white transition-colors"></div>
+        </div>
 
-                {/* Playback Controls */}
-                <div className="absolute bottom-4 left-4 right-4 flex items-center gap-3">
-                  <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-600 w-1/3 rounded-full"></div>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-300 text-sm">
-                    <button className="p-2 hover:bg-slate-800/50 rounded transition-colors">
-                      <SkipBack size={16} />
-                    </button>
-                    <button className="p-2 hover:bg-slate-800/50 rounded transition-colors">
-                      <SkipForward size={16} />
-                    </button>
-                    <select
-                      value={playbackRate}
-                      onChange={(e) => setPlaybackRate(Number(e.target.value))}
-                      className="px-2 py-1 bg-slate-800/50 border border-slate-700 rounded text-slate-300 text-xs"
-                    >
-                      <option value={0.5}>0.5x</option>
-                      <option value={1}>1x</option>
-                      <option value={1.5}>1.5x</option>
-                      <option value={2}>2x</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Bar */}
-            <div className="flex items-center justify-center gap-3 flex-wrap">
-              {/* Like Button */}
-              <motion.button
-                onClick={() => setIsLiked(!isLiked)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                  isLiked
-                    ? 'bg-red-500/20 text-red-500 border border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
-                    : 'bg-slate-800/50 text-slate-300 border border-slate-700/50 hover:bg-slate-800 hover:border-slate-600'
-                }`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Heart
-                  size={18}
-                  fill={isLiked ? 'currentColor' : 'none'}
-                  className={isLiked ? 'text-red-500' : 'text-slate-300'}
-                />
-                <span className="text-sm">{isLiked ? '已喜欢' : '喜欢'}</span>
-              </motion.button>
-
-              {/* Save Button */}
-              <motion.button
-                onClick={handleSaveClick}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                  isSaved
-                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40'
-                    : 'bg-slate-800/50 text-slate-300 border border-slate-700/50 hover:bg-slate-800 hover:border-slate-600'
-                }`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} />
-                <span className="text-sm">收藏</span>
-              </motion.button>
-
-              {/* Share Button */}
-              <motion.button
-                onClick={handleShare}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-slate-800/50 text-slate-300 border border-slate-700/50 hover:bg-slate-800 hover:border-slate-600"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Share2 size={18} />
-                <span className="text-sm">分享</span>
-              </motion.button>
-
-              {/* Download/Source Button */}
-              <motion.button
-                onClick={handleDownloadOrSource}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-slate-800/50 text-slate-300 border border-slate-700/50 hover:bg-slate-800 hover:border-slate-600"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {video?.isLocalFile ? (
-                  <>
-                    <Download size={18} />
-                    <span className="text-sm">下载视频</span>
-                  </>
-                ) : (
-                  <>
-                    <Globe size={18} />
-                    <span className="text-sm">访问源站</span>
-                  </>
-                )}
-              </motion.button>
-            </div>
-
-            {/* Toast Notification */}
-            <AnimatePresence>
-              {toastMessage && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50"
-                >
-                  <div className="px-6 py-3 bg-slate-900/90 backdrop-blur-md border border-purple-500/30 rounded-lg shadow-[0_0_20px_rgba(147,51,234,0.3)] flex items-center gap-3">
-                    <span className="text-white text-sm font-medium">{toastMessage}</span>
-                    <button
-                      onClick={() => setToastMessage(null)}
-                      className="text-slate-400 hover:text-white transition-colors"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Save Modal */}
-            <AnimatePresence>
-              {isSaveModalOpen && (
-                <>
-                  {/* Background Overlay */}
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setIsSaveModalOpen(false)}
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-                  />
-
-                  {/* Modal Content */}
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="w-full max-w-2xl backdrop-blur-xl bg-slate-900/80 border border-white/10 rounded-xl shadow-[0_0_40px_rgba(147,51,234,0.2)] p-8 relative max-h-[90vh] overflow-y-auto">
-                      {/* Close Button */}
-                      <button
-                        onClick={() => setIsSaveModalOpen(false)}
-                        className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-colors"
-                      >
-                        <X size={20} />
-                      </button>
-
-                      {/* Title */}
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2 rounded-lg bg-gradient-to-br from-purple-600/30 to-blue-600/30 border border-purple-500/30">
-                          <Bookmark className="text-purple-400" size={24} />
-                        </div>
-                        <h2 className="text-2xl font-bold text-white">保存视频</h2>
-                      </div>
-
-                      {/* Accordion Panels */}
-                      <div className="space-y-4 mb-6">
-                        {/* Panel A: Personal Collection */}
-                        <div className="premium-card overflow-hidden">
-                          {/* Header */}
-                          <motion.button
-                            onClick={() => setSaveToPersonal(!saveToPersonal)}
-                            className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
-                            whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                                saveToPersonal
-                                  ? 'bg-purple-600 border-purple-500'
-                                  : 'border-slate-600 bg-transparent'
-                              }`}>
-                                {saveToPersonal && <Check size={14} className="text-white" />}
-                              </div>
-                              <User size={20} className="text-blue-400" />
-                              <span className="text-white font-medium">Save to Personal</span>
-                            </div>
-                            {saveToPersonal ? (
-                              <ChevronUp size={20} className="text-slate-400" />
-                            ) : (
-                              <ChevronDown size={20} className="text-slate-400" />
-                            )}
-                          </motion.button>
-
-                          {/* Body */}
-                          <AnimatePresence>
-                            {saveToPersonal && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
-                                className="overflow-hidden"
-                              >
-                                <div className="px-4 pb-4 space-y-2">
-                                  {/* Folder List */}
-                                  {personalFolders.map((folder) => (
-                                    <motion.button
-                                      key={folder.id}
-                                      onClick={() => setSelectedPersonalFolder(folder.id)}
-                                      className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
-                                        selectedPersonalFolder === folder.id
-                                          ? 'bg-purple-600/20 border border-purple-500/40'
-                                          : 'bg-slate-800/30 border border-transparent hover:bg-slate-800/50'
-                                      }`}
-                                      whileHover={{ scale: 1.01, x: 4 }}
-                                      whileTap={{ scale: 0.98 }}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                          selectedPersonalFolder === folder.id
-                                            ? 'border-purple-500 bg-purple-500'
-                                            : 'border-slate-600'
-                                        }`}>
-                                          {selectedPersonalFolder === folder.id && (
-                                            <div className="w-2 h-2 rounded-full bg-white" />
-                                          )}
-                                        </div>
-                                        <span className="text-white text-sm font-medium">{folder.name}</span>
-                                      </div>
-                                      <span className="text-xs text-slate-400">{folder.count} items</span>
-                                    </motion.button>
-                                  ))}
-
-                                  {/* New Folder Input or Button */}
-                                  {creatingFolderLocation === 'personal' ? (
-                                    <motion.div
-                                      initial={{ opacity: 0, y: -10 }}
-                                      animate={{ opacity: 1, y: 0 }}
-                                      className="flex items-center gap-2 mt-2"
-                                    >
-                                      <input
-                                        type="text"
-                                        value={newFolderName}
-                                        onChange={(e) => setNewFolderName(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleCreateFolder('personal')}
-                                        placeholder="文件夹名称"
-                                        className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all text-sm"
-                                        autoFocus
-                                      />
-                                      <motion.button
-                                        onClick={() => handleCreateFolder('personal')}
-                                        disabled={!newFolderName.trim()}
-                                        className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                      >
-                                        创建
-                                      </motion.button>
-                                      <motion.button
-                                        onClick={() => {
-                                          setCreatingFolderLocation(null);
-                                          setNewFolderName('');
-                                        }}
-                                        className="px-4 py-2 bg-slate-800/50 text-slate-300 rounded-lg text-sm font-medium"
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                      >
-                                        取消
-                                      </motion.button>
-                                    </motion.div>
-                                  ) : (
-                                    <motion.button
-                                      onClick={() => setCreatingFolderLocation('personal')}
-                                      className="w-full flex items-center gap-2 p-3 rounded-lg bg-slate-800/30 border border-slate-700/50 hover:bg-slate-800/50 text-slate-300 hover:text-white transition-all mt-2"
-                                      whileHover={{ scale: 1.01, x: 4 }}
-                                      whileTap={{ scale: 0.98 }}
-                                    >
-                                      <Plus size={16} />
-                                      <span className="text-sm font-medium">New Folder</span>
-                                    </motion.button>
-                                  )}
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-
-                        {/* Panel B: Team Library */}
-                        <div className="premium-card overflow-hidden">
-                          {/* Header */}
-                          <motion.button
-                            onClick={() => setSaveToTeam(!saveToTeam)}
-                            className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
-                            whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                                saveToTeam
-                                  ? 'bg-purple-600 border-purple-500'
-                                  : 'border-slate-600 bg-transparent'
-                              }`}>
-                                {saveToTeam && <Check size={14} className="text-white" />}
-                              </div>
-                              <Building2 size={20} className="text-emerald-400" />
-                              <span className="text-white font-medium">Save to Team</span>
-                            </div>
-                            {saveToTeam ? (
-                              <ChevronUp size={20} className="text-slate-400" />
-                            ) : (
-                              <ChevronDown size={20} className="text-slate-400" />
-                            )}
-                          </motion.button>
-
-                          {/* Body */}
-                          <AnimatePresence>
-                            {saveToTeam && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1.0] }}
-                                className="overflow-hidden"
-                              >
-                                <div className="px-4 pb-4 space-y-2">
-                                  {/* Folder List */}
-                                  {teamFolders.map((folder) => (
-                                    <motion.button
-                                      key={folder.id}
-                                      onClick={() => setSelectedTeamFolder(folder.id)}
-                                      className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
-                                        selectedTeamFolder === folder.id
-                                          ? 'bg-purple-600/20 border border-purple-500/40'
-                                          : 'bg-slate-800/30 border border-transparent hover:bg-slate-800/50'
-                                      }`}
-                                      whileHover={{ scale: 1.01, x: 4 }}
-                                      whileTap={{ scale: 0.98 }}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                          selectedTeamFolder === folder.id
-                                            ? 'border-purple-500 bg-purple-500'
-                                            : 'border-slate-600'
-                                        }`}>
-                                          {selectedTeamFolder === folder.id && (
-                                            <div className="w-2 h-2 rounded-full bg-white" />
-                                          )}
-                                        </div>
-                                        <span className="text-white text-sm font-medium">{folder.name}</span>
-                                      </div>
-                                      <span className="text-xs text-slate-400">{folder.count} items</span>
-                                    </motion.button>
-                                  ))}
-
-                                  {/* New Folder Input or Button */}
-                                  {creatingFolderLocation === 'team' ? (
-                                    <motion.div
-                                      initial={{ opacity: 0, y: -10 }}
-                                      animate={{ opacity: 1, y: 0 }}
-                                      className="flex items-center gap-2 mt-2"
-                                    >
-                                      <input
-                                        type="text"
-                                        value={newFolderName}
-                                        onChange={(e) => setNewFolderName(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleCreateFolder('team')}
-                                        placeholder="文件夹名称"
-                                        className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all text-sm"
-                                        autoFocus
-                                      />
-                                      <motion.button
-                                        onClick={() => handleCreateFolder('team')}
-                                        disabled={!newFolderName.trim()}
-                                        className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                      >
-                                        创建
-                                      </motion.button>
-                                      <motion.button
-                                        onClick={() => {
-                                          setCreatingFolderLocation(null);
-                                          setNewFolderName('');
-                                        }}
-                                        className="px-4 py-2 bg-slate-800/50 text-slate-300 rounded-lg text-sm font-medium"
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                      >
-                                        取消
-                                      </motion.button>
-                                    </motion.div>
-                                  ) : (
-                                    <motion.button
-                                      onClick={() => setCreatingFolderLocation('team')}
-                                      className="w-full flex items-center gap-2 p-3 rounded-lg bg-slate-800/30 border border-slate-700/50 hover:bg-slate-800/50 text-slate-300 hover:text-white transition-all mt-2"
-                                      whileHover={{ scale: 1.01, x: 4 }}
-                                      whileTap={{ scale: 0.98 }}
-                                    >
-                                      <Plus size={16} />
-                                      <span className="text-sm font-medium">New Folder</span>
-                                    </motion.button>
-                                  )}
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex gap-4 justify-end pt-4 border-t border-slate-800/50">
-                        <motion.button
-                          onClick={() => setIsSaveModalOpen(false)}
-                          className="px-6 py-3 bg-slate-800/50 text-slate-300 rounded-lg font-medium hover:bg-slate-800 transition-all border border-slate-700/50"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          取消
-                        </motion.button>
-                        <motion.button
-                          onClick={handleSaveConfirm}
-                          disabled={!saveToPersonal && !saveToTeam}
-                          className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold shadow-[0_0_20px_rgba(147,51,234,0.5)] hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                          whileHover={{ scale: saveToPersonal || saveToTeam ? 1.05 : 1 }}
-                          whileTap={{ scale: saveToPersonal || saveToTeam ? 0.95 : 1 }}
-                        >
-                          {getSaveButtonText()}
-                        </motion.button>
-                      </div>
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-
-            {/* Key Frames Storyboard */}
-            <div className="premium-card p-6">
-              <h3 className="text-lg font-bold text-white mb-4">关键帧故事板</h3>
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                {keyFrames.map((frame, index) => (
-                  <motion.div
-                    key={frame.id}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="flex-shrink-0 w-32 cursor-pointer group"
-                  >
-                    <div className="relative aspect-video rounded-lg overflow-hidden border border-slate-700/50 hover:border-purple-500/50 transition-all">
-                      <img
-                        src={frame.thumbnail}
-                        alt={`Frame ${index + 1}`}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                      />
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950/90 to-transparent p-2">
-                        <p className="text-xs text-white font-medium">{frame.time}</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
+        <div ref={sidebarRef} style={{ width: sidebarWidth }} className="border-l border-gray-800 bg-black flex flex-col shrink-0 h-full relative z-20">
+          <div className="flex shrink-0 border-b border-gray-800">
+            <TabButton name="visual" label="视觉" icon={<span>🎨</span>} />
+            <TabButton name="motion" label="动效" icon={<span>⚡️</span>} />
+            <TabButton name="script" label="脚本" icon={<span>📝</span>} />
           </div>
 
-          {/* Right Column - 30% */}
-          <div className="flex-[3]">
-            <div className="premium-card p-6 sticky top-8">
-              {/* Tabs */}
-              <div className="flex gap-2 mb-6 border-b border-slate-800">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`px-4 py-2 text-sm font-medium transition-all relative ${
-                      activeTab === tab.id
-                        ? 'text-purple-400'
-                        : 'text-slate-400 hover:text-slate-300'
-                    }`}
-                  >
-                    {tab.label}
-                    {activeTab === tab.id && (
-                      <motion.div
-                        layoutId="activeTab"
-                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600"
-                        initial={false}
-                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                      />
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Tab Content */}
-              <div className="space-y-6">
-                {/* 视觉分析 Tab */}
-                {activeTab === 'visual' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-6"
-                  >
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">
-                        主色调配色板
-                      </h4>
-                      <div className="flex gap-3 mb-4">
-                        {video.analysis.hexPalette.map((color, index) => (
-                          <div key={index} className="flex flex-col items-center gap-2">
-                            <div
-                              className="w-16 h-16 rounded-lg border-2 border-slate-700/50 shadow-lg"
-                              style={{ backgroundColor: color }}
-                            />
-                            <span className="text-xs text-slate-400 font-mono">{color}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">
-                        高清封面
-                      </h4>
-                      <div className="rounded-lg overflow-hidden border border-slate-700/50">
-                        <img
-                          src={video.coverUrl}
-                          alt="Cover"
-                          className="w-full h-auto object-cover"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">
-                        标签
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {video.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="px-3 py-1.5 bg-purple-600/30 text-purple-200 rounded-md text-xs font-medium border border-purple-500/40 backdrop-blur-sm"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 风格深度解析 */}
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                        风格深度解析
-                      </h4>
-                      <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl p-4 border border-white/5">
-                        <p className="text-slate-300 text-sm leading-relaxed text-justify">
-                          该视频采用了高饱和度的霓虹色调（紫色/蓝色）与深色背景形成强烈对比，营造出极具未来感的科技氛围。构图上运用了大量的几何图形和发光线条引导视线，信息呈现清晰且富有层次感，非常适合表现数字化产品和前沿技术主题。
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* 相似风格参考 */}
-                    <div className="mt-6">
-                      <h4 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">
-                        相似风格参考
-                      </h4>
-                      <div className="grid grid-cols-3 gap-3">
-                        {[
-                          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&h=200&fit=crop',
-                          'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=300&h=200&fit=crop',
-                          'https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=300&h=200&fit=crop',
-                        ].map((imgUrl, index) => (
-                          <div
-                            key={index}
-                            className="rounded-lg overflow-hidden border border-white/10 aspect-video relative group cursor-pointer"
-                          >
-                            <img
-                              src={imgUrl}
-                              alt={`Similar style ${index + 1}`}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = 'https://via.placeholder.com/300x200/1e293b/64748b?text=Image';
-                              }}
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* 动效笔记 Tab */}
-                {activeTab === 'motion' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-4"
-                  >
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">
-                        动效参考点
-                      </h4>
-                      <div className="glass-effect p-4 rounded-lg">
-                        <p className="text-white text-sm leading-relaxed whitespace-pre-line">
-                          {video.analysis.motionNotes || '暂无动效笔记'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">
-                        关键时间点
-                      </h4>
-                      <div className="space-y-2">
-                        <div className="flex items-start gap-3 p-3 glass-effect rounded-lg">
-                          <span className="text-purple-400 text-xs font-mono font-semibold">0:15</span>
-                          <p className="text-slate-300 text-sm flex-1">弹窗阻尼感参考</p>
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
+            {analysis.status === 'error' && (
+                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-lg text-red-400 text-xs mb-4">
+                    <div className="flex gap-2 items-start mb-3">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <div className="font-semibold mb-1">{analysis.notes}</div>
+                            {analysis.errorDetails && (
+                                <div className="text-red-300/80 whitespace-pre-line text-[10px] leading-relaxed mt-2">
+                                    {analysis.errorDetails}
+                                </div>
+                            )}
                         </div>
-                        <div className="flex items-start gap-3 p-3 glass-effect rounded-lg">
-                          <span className="text-purple-400 text-xs font-mono font-semibold">0:30</span>
-                          <p className="text-slate-300 text-sm flex-1">转场动画流畅</p>
-                        </div>
-                        <div className="flex items-start gap-3 p-3 glass-effect rounded-lg">
-                          <span className="text-purple-400 text-xs font-mono font-semibold">1:05</span>
-                          <p className="text-slate-300 text-sm flex-1">交互反馈细节</p>
-                        </div>
-                      </div>
                     </div>
-                  </motion.div>
-                )}
+                    <div className="flex gap-2 mt-3">
+                        <button 
+                            onClick={async () => {
+                                // 先检查健康状态
+                                setAnalysis((prev:any) => ({ 
+                                    ...prev, 
+                                    status: 'loading', 
+                                    notes: "正在检查后端状态..." 
+                                }));
+                                
+                                try {
+                                    const healthResponse = await fetch(`${API_URL}/health`, {
+                                        method: 'GET',
+                                        signal: AbortSignal.timeout(5000)
+                                    });
+                                    
+                                    if (!healthResponse.ok) {
+                                        throw new Error('后端未运行');
+                                    }
+                                    
+                                    const healthData = await healthResponse.json();
+                                    console.log('✅ 后端健康检查通过:', healthData);
+                                    
+                                    // 健康检查通过，开始分析
+                                    setAnalysis((prev:any) => ({ 
+                                        ...prev, 
+                                        status: 'loading', 
+                                        notes: "正在重新分析..." 
+                                    }));
+                                    
+                                    const response = await fetch(`${API_URL}/analyze_video?video_id=${id}`, {
+                                      method: 'GET',
+                                      headers: { 'Content-Type': 'application/json' }
+                                    });
+                                    
+                                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                    
+                                    const data = await response.json();
+                                    if (data.status === 'success') {
+                                        const aiData = data.ai_result;
+                                        setAnalysis({
+                                            visual: { 
+                                                style: aiData.visual_style || "未识别到风格", 
+                                                status: 'done'
+                                            },
+                                            motion: { analysis: aiData.motion_analysis || "未识别到动效", status: 'done' },
+                                            script: { structure: aiData.script_structure || [], status: 'done' },
+                                            status: 'success',
+                                            notes: "AI 分析成功"
+                                        });
+                                    } else {
+                                        const errorMsg = data.message || "AI 返回错误";
+                                        let errorDetails = "";
+                                        if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('Quota')) {
+                                            errorDetails = "API 配额已用完。\n\n解决方案：\n1. 等待一段时间后重试\n2. 检查 Google AI Studio 的配额限制\n3. 考虑升级到付费计划";
+                                        } else {
+                                            errorDetails = errorMsg;
+                                        }
+                                        setAnalysis((prev:any) => ({ 
+                                            ...prev, 
+                                            status: 'error', 
+                                            notes: "重试失败",
+                                            errorDetails: errorDetails
+                                        }));
+                                    }
+                                } catch (e: any) {
+                                    setAnalysis((prev:any) => ({ 
+                                        ...prev, 
+                                        status: 'error', 
+                                        notes: `重试失败: ${e.message || e.toString()}`,
+                                        errorDetails: "请确保后端服务正在运行"
+                                    }));
+                                }
+                            }}
+                            className="flex-1 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-red-300 text-xs font-medium transition"
+                        >
+                            🔄 重新分析
+                        </button>
+                        <button 
+                            onClick={async () => {
+                                setAnalysis((prev:any) => ({ 
+                                    ...prev, 
+                                    status: 'loading', 
+                                    notes: "正在检查后端状态..." 
+                                }));
+                                
+                                try {
+                                    const response = await fetch(`${API_URL}/health`, {
+                                        method: 'GET',
+                                        signal: AbortSignal.timeout(5000)
+                                    });
+                                    
+                                    if (response.ok) {
+                                        const data = await response.json();
+                                        alert(`✅ 后端运行正常！\n\n状态: ${data.status}\n消息: ${data.message}\n代理: ${data.proxy}`);
+                                        setAnalysis((prev:any) => ({ 
+                                            ...prev, 
+                                            status: 'idle',
+                                            notes: "后端检查完成，可以开始分析"
+                                        }));
+                                    } else {
+                                        throw new Error('后端未响应');
+                                    }
+                                } catch (e: any) {
+                                    alert(`❌ 后端未运行！\n\n请执行以下步骤：\n1. 打开终端\n2. 运行: python main.py\n3. 等待看到 "✅ Google 连接测试通过"\n4. 刷新页面`);
+                                    setAnalysis((prev:any) => ({ 
+                                        ...prev, 
+                                        status: 'error',
+                                        notes: "后端未运行",
+                                        errorDetails: "请运行 python main.py 启动后端服务"
+                                    }));
+                                }
+                            }}
+                            className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-blue-300 text-xs font-medium transition"
+                        >
+                            🔍 检查后端
+                        </button>
+                    </div>
+                </div>
+            )}
+            
+            {analysis.status === 'loading' && (
+                <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg text-blue-400 text-xs mb-4 flex gap-2 items-center">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <div>{analysis.notes}</div>
+                </div>
+            )}
+            
+             {activeTab === 'visual' && (
+                <>
+                    <AnalysisSection title="AI VISUAL STYLE" loading={analysis.status === 'loading'}>
+                        <div className={`bg-gray-900/50 p-4 rounded-lg border border-gray-800 text-sm text-gray-400 italic leading-relaxed ${analysis.status === 'loading'?'animate-pulse':''}`}>
+                            "{analysis.visual.style}"
+                        </div>
+                    </AnalysisSection>
+                    
+                    {/* 配色方案 - 从视频封面真实提取 */}
+                    <AnalysisSection title="COLOR PALETTE">
+                        {/* 隐藏的图片用于提取颜色 */}
+                        {coverImageUrl && displayColors.length === 0 && (
+                            <div className="absolute inset-0 pointer-events-none opacity-0 w-1 h-1 overflow-hidden">
+                                <Palette
+                                    src={`${coverImageUrl}?t=${new Date().getTime()}`}
+                                    colorCount={4}
+                                    format="hex"
+                                    crossOrigin="anonymous"
+                                >
+                                    {({ data, loading }) => {
+                                        if (!loading && data && Array.isArray(data) && data.length > 0 && !colorsExtracting) {
+                                            setColorsExtracting(true);
+                                            setTimeout(() => {
+                                                setExtractedColors(data.slice(0, 4));
+                                                setColorsExtracting(false);
+                                            }, 100);
+                                        }
+                                        return null;
+                                    }}
+                                </Palette>
+                            </div>
+                        )}
+                        
+                        {displayColors.length > 0 ? (
+                            <div className="flex gap-2">
+                                {displayColors.slice(0, 4).map((color: string, index: number) => (
+                                    <div
+                                        key={index}
+                                        className="flex-1 h-16 rounded-lg border border-white/10 overflow-hidden group cursor-pointer hover:scale-105 transition-transform"
+                                        style={{ backgroundColor: color }}
+                                        title={color}
+                                    >
+                                        <div className="h-full w-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                                            <span className="text-xs font-mono text-white drop-shadow-lg">{color}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex gap-2">
+                                {[0, 1, 2, 3].map((i) => (
+                                    <div key={i} className="flex-1 h-16 rounded-lg border border-white/10 bg-slate-800/50 flex items-center justify-center">
+                                        <Loader2 size={16} className="animate-spin text-slate-500" />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </AnalysisSection>
+                    
+                    <AnalysisSection title="TAGS">
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {tags.map((tag: string, index: number) => (
+                                <span key={index} className="px-2.5 py-1 bg-gray-900 text-gray-300 text-xs rounded border border-gray-800 hover:border-gray-600 cursor-pointer transition">#{tag}</span>
+                            ))}
+                         </div>
+                    </AnalysisSection>
+                </>
+            )}
 
-                {/* 脚本结构 Tab */}
-                {activeTab === 'script' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-4"
-                  >
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">
-                        脚本结构
-                      </h4>
-                      <div className="glass-effect p-4 rounded-lg">
-                        <p className="text-white text-sm leading-relaxed whitespace-pre-line">
-                          {video.analysis.scriptNotes || '暂无脚本笔记'}
-                        </p>
-                      </div>
+            {activeTab === 'motion' && (
+                 <AnalysisSection title="AI MOTION ANALYSIS" loading={analysis.status === 'loading'}>
+                    <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg flex gap-3 items-start">
+                        <Activity className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                        <p className="text-xs text-blue-300 leading-relaxed">{analysis.motion.analysis}</p>
                     </div>
+                </AnalysisSection>
+            )}
 
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">
-                        时间轴结构
-                      </h4>
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3 p-3 glass-effect rounded-lg">
-                          <span className="text-purple-400 text-xs font-mono font-semibold">0-5s</span>
-                          <div className="flex-1">
-                            <p className="text-white text-sm font-medium mb-1">痛点引入</p>
-                            <p className="text-slate-400 text-xs">快速建立用户共鸣</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3 p-3 glass-effect rounded-lg">
-                          <span className="text-purple-400 text-xs font-mono font-semibold">5-20s</span>
-                          <div className="flex-1">
-                            <p className="text-white text-sm font-medium mb-1">功能演示</p>
-                            <p className="text-slate-400 text-xs">核心功能展示</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3 p-3 glass-effect rounded-lg">
-                          <span className="text-purple-400 text-xs font-mono font-semibold">20-30s</span>
-                          <div className="flex-1">
-                            <p className="text-white text-sm font-medium mb-1">价值总结</p>
-                            <p className="text-slate-400 text-xs">强化核心卖点</p>
-                          </div>
-                        </div>
-                      </div>
+            {activeTab === 'script' && (
+                <AnalysisSection title="AI SCRIPT STRUCTURE" loading={analysis.status === 'loading'}>
+                     <div className="space-y-4">
+                        {analysis.script.structure && analysis.script.structure.length > 0 ? analysis.script.structure.map((item: any, i: number) => (
+                            <div key={i} className="flex items-start gap-4">
+                                <div className="w-16 text-xs font-mono text-blue-400 text-right mt-1 shrink-0">{item.time}</div>
+                                <div className="flex-1 bg-gray-900/50 p-3 rounded border border-gray-800">
+                                    <h5 className="text-xs font-bold text-gray-200 mb-1">{item.label}</h5>
+                                    <p className="text-xs text-gray-400 leading-relaxed">{item.summary}</p>
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="text-xs text-gray-500 text-center py-4">AI 分析中...</div>
+                        )}
                     </div>
-                  </motion.div>
-                )}
-              </div>
-            </div>
+                </AnalysisSection>
+            )}
           </div>
         </div>
       </div>
