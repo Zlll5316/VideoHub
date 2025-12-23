@@ -163,11 +163,23 @@ export default function Dashboard() {
     // 生成趋势数据（基于标签统计）
     const tagCounts: Record<string, number> = {};
     convertedVideos.forEach(video => {
-      video.tags.forEach(tag => {
-        const cleanTag = tag.replace('#', '');
-        tagCounts[cleanTag] = (tagCounts[cleanTag] || 0) + 1;
-      });
+      if (video.tags && video.tags.length > 0) {
+        video.tags.forEach(tag => {
+          const cleanTag = tag.replace('#', '').trim();
+          if (cleanTag) {
+            tagCounts[cleanTag] = (tagCounts[cleanTag] || 0) + 1;
+          }
+        });
+      }
     });
+
+    // 如果标签数据不足，添加默认趋势
+    if (Object.keys(tagCounts).length === 0) {
+      // 基于视频数量生成默认趋势
+      tagCounts['SaaS'] = convertedVideos.length;
+      tagCounts['设计灵感'] = Math.max(1, Math.floor(convertedVideos.length * 0.7));
+      tagCounts['视频分析'] = Math.max(1, Math.floor(convertedVideos.length * 0.5));
+    }
 
     const trendsData: Trend[] = Object.entries(tagCounts)
       .sort(([, a], [, b]) => b - a)

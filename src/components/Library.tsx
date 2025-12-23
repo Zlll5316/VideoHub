@@ -193,11 +193,16 @@ export default function Library() {
   const [sortType, setSortType] = useState<SortType>('popular');
   const [videos, setVideos] = useState<Video[]>([]);
 
-  // 从 URL 参数读取 liked 状态
+  // 从 URL 参数读取 liked 状态和 tag 参数
   useEffect(() => {
     const likedParam = searchParams.get('liked');
     if (likedParam === 'true') {
       setShowLikedOnly(true);
+    }
+    
+    const tagParam = searchParams.get('tag');
+    if (tagParam) {
+      setSelectedTag(tagParam);
     }
   }, [searchParams]);
 

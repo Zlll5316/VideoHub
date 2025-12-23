@@ -48,26 +48,37 @@ export default function BentoGrid({ trends, onCollectClick, likedCount = 0, onFa
           <h3 className="text-xl font-bold text-white">SaaS 视频流行趋势</h3>
         </div>
         <div className="space-y-3">
-          {trends.slice(0, 3).map((trend, index) => (
-            <motion.div 
-              key={trend.id} 
-              className="flex items-center justify-between p-4 rounded-lg glass-effect hover:bg-slate-800/60 transition-all duration-300 cursor-pointer group"
-              whileHover={{ x: 4, scale: 1.01 }}
-              onClick={() => navigate('/trends')}
-            >
-              <div className="flex items-center gap-4">
-                <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                  index === 0 ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.6)]' :
-                  index === 1 ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)]' :
-                  'bg-slate-700/60 text-slate-300 border border-slate-600/40'
-                } group-hover:scale-110`}>
-                  {trend.rank}
-                </span>
-                <span className="text-white font-medium text-base">{trend.name}</span>
-              </div>
-              <span className="text-sm text-slate-400 font-light">{trend.count} 个视频</span>
-            </motion.div>
-          ))}
+          {trends.length > 0 ? (
+            trends.slice(0, 3).map((trend, index) => (
+              <motion.div 
+                key={trend.id} 
+                className="flex items-center justify-between p-4 rounded-lg glass-effect hover:bg-slate-800/60 transition-all duration-300 cursor-pointer group"
+                whileHover={{ x: 4, scale: 1.01 }}
+                onClick={() => {
+                  // 跳转到 Library 页面，并自动筛选该标签
+                  navigate(`/library?tag=${encodeURIComponent(trend.name)}`);
+                }}
+              >
+                <div className="flex items-center gap-4">
+                  <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                    index === 0 ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.6)]' :
+                    index === 1 ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)]' :
+                    'bg-slate-700/60 text-slate-300 border border-slate-600/40'
+                  } group-hover:scale-110`}>
+                    {trend.rank}
+                  </span>
+                  <span className="text-white font-medium text-base">{trend.name}</span>
+                </div>
+                <span className="text-sm text-slate-400 font-light">{trend.count} 个视频</span>
+              </motion.div>
+            ))
+          ) : (
+            // 空状态：显示提示信息
+            <div className="text-center py-8">
+              <p className="text-slate-400 text-sm mb-2">暂无趋势数据</p>
+              <p className="text-slate-500 text-xs">开始采集视频后，将自动生成流行趋势</p>
+            </div>
+          )}
         </div>
       </motion.div>
 
