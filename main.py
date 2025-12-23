@@ -71,14 +71,26 @@ async def analyze(video_id: str):
     try:
         print("   2️⃣ 正在呼叫 Gemini AI...")
         
-        # ✅ 修复点3：使用 gemini-1.5-flash（稳定可用）
-        # 如果失败，尝试 gemini-1.5-pro
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            print("   📡 使用模型: gemini-1.5-flash")
-        except:
-            model = genai.GenerativeModel('gemini-1.5-pro')
-            print("   📡 使用模型: gemini-1.5-pro")
+        # ✅ 修复点3：智能选择可用模型（按优先级尝试）
+        model = None
+        model_names = [
+            'gemini-2.0-flash-exp',  # 最新实验版
+            'gemini-1.5-flash',      # 稳定版
+            'gemini-1.5-pro',        # 专业版
+            'gemini-pro'              # 旧版（可能不可用）
+        ]
+        
+        for model_name in model_names:
+            try:
+                model = genai.GenerativeModel(model_name)
+                print(f"   📡 使用模型: {model_name}")
+                break
+            except Exception as e:
+                print(f"   ⚠️ 模型 {model_name} 不可用: {str(e)[:50]}")
+                continue
+        
+        if model is None:
+            raise Exception("所有 Gemini 模型都不可用，请检查 API Key 和网络连接")
         
         prompt = f"""
         你是一个专业的视频分析师。请分析以下视频字幕，返回纯 JSON 数据。
