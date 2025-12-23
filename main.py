@@ -71,14 +71,16 @@ async def analyze(video_id: str):
     try:
         print("   2️⃣ 正在呼叫 Gemini AI...")
         
-        # ✅ 修复点3：智能选择可用模型（按优先级尝试）
-        # 已验证 gemini-1.5-flash 可用，优先使用
+        # ✅ 修复点3：使用已验证可用的模型（带 models/ 前缀）
+        # 从 API 列表获取的可用模型
         model = None
         model_names = [
-            'gemini-1.5-flash',      # ✅ 已验证可用，稳定快速
-            'gemini-1.5-pro',        # 专业版（备用）
-            'gemini-2.0-flash-exp',  # 最新实验版（可能不可用）
-            'gemini-pro'              # 旧版（可能不可用）
+            'models/gemini-2.0-flash',        # ✅ 已验证可用，快速稳定
+            'models/gemini-2.0-flash-lite',    # ✅ 轻量版，成本更低
+            'models/gemini-2.5-flash',         # ✅ 最新版本
+            'models/gemini-2.5-pro',           # ✅ 专业版
+            'models/gemini-2.0-flash-001',     # 带版本号
+            'models/gemini-2.0-flash-exp',     # 实验版
         ]
         
         for model_name in model_names:
@@ -87,11 +89,15 @@ async def analyze(video_id: str):
                 print(f"   📡 使用模型: {model_name}")
                 break
             except Exception as e:
-                print(f"   ⚠️ 模型 {model_name} 不可用: {str(e)[:50]}")
+                error_msg = str(e)
+                if '404' in error_msg or 'not found' in error_msg.lower():
+                    print(f"   ⚠️ 模型 {model_name} 不存在，尝试下一个...")
+                else:
+                    print(f"   ⚠️ 模型 {model_name} 错误: {error_msg[:60]}")
                 continue
         
         if model is None:
-            raise Exception("所有 Gemini 模型都不可用，请检查 API Key 和网络连接")
+            raise Exception("所有 Gemini 模型都不可用。\n\n可能原因：\n1. API Key 无效或配额已用完\n2. 网络连接问题\n3. API 版本不匹配\n\n建议：\n1. 检查 API Key: https://aistudio.google.com/app/apikey\n2. 查看配额使用情况\n3. 检查网络和代理设置")
         
         prompt = f"""
         你是一个专业的视频分析师。请分析以下视频字幕，返回纯 JSON 数据。
