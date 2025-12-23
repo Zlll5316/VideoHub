@@ -199,8 +199,8 @@ export default function Dashboard() {
     }
   };
 
-  // Discovery Feed: 显示所有视频（打乱顺序）
-  const discoveryVideos = [...videos].sort(() => Math.random() - 0.5);
+  // Discovery Feed: 显示4个视频（打乱顺序）
+  const discoveryVideos = [...videos].sort(() => Math.random() - 0.5).slice(0, 4);
 
   return (
     <div className="flex-1 overflow-y-auto">
