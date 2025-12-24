@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserPlus, X, Mail, FolderOpen, Plus, Loader2, Trash2, CheckSquare, Square } from 'lucide-react';
+import { UserPlus, X, Mail, FolderOpen, Plus, Loader2, Trash2, CheckSquare, Square, MoreVertical } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
@@ -57,6 +57,7 @@ export default function TeamSpace() {
   // 多选状态
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   // 加载当前用户
   useEffect(() => {
@@ -72,6 +73,18 @@ export default function TeamSpace() {
     if (!currentUser) return;
     loadTeamData();
   }, [currentUser]);
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.dropdown-menu') && !target.closest('.action-area')) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const loadTeamData = async () => {
     if (!currentUser) return;
@@ -459,9 +472,40 @@ export default function TeamSpace() {
     }
   };
 
+  // 检查用户是否有删除权限
+  const checkDeletePermission = () => {
+    if (!currentUser) {
+      console.log('❌ 权限检查：用户未登录');
+      return false;
+    }
+    
+    const currentMember = members.find(m => m.user_id === currentUser.id);
+    if (!currentMember) {
+      console.log('❌ 权限检查：用户不是团队成员', { userId: currentUser.id, membersCount: members.length });
+      return false;
+    }
+    
+    const hasPermission = currentMember.role === 'Owner' || currentMember.role === 'Admin' || currentMember.role === 'Editor';
+    console.log('✅ 权限检查：', { 
+      userId: currentUser.id, 
+      role: currentMember.role, 
+      hasPermission,
+      allMembers: members.map(m => ({ id: m.user_id, role: m.role }))
+    });
+    
+    // Owner, Admin, Editor 都可以删除
+    return hasPermission;
+  };
+
   // 切换文件夹选中状态
   const toggleFolderSelection = (folderId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止触发文件夹点击事件
+    
+    // 检查权限
+    if (!checkDeletePermission()) {
+      alert('只有编辑者及以上权限可以选择文件夹');
+      return;
+    }
     
     setSelectedFolders(prev => {
       const newSet = new Set(prev);
@@ -506,8 +550,7 @@ export default function TeamSpace() {
     if (!team || !currentUser || selectedFolders.size === 0) return;
 
     // 检查当前用户权限
-    const currentMember = members.find(m => m.user_id === currentUser.id);
-    if (!currentMember || (currentMember.role !== 'Owner' && currentMember.role !== 'Admin' && currentMember.role !== 'Editor')) {
+    if (!checkDeletePermission()) {
       alert('只有编辑者及以上权限可以删除文件夹');
       return;
     }
@@ -758,9 +801,9 @@ export default function TeamSpace() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {folders.map((folder, index) => {
-                      const currentMember = members.find(m => m.user_id === currentUser?.id);
-                      const canDelete = currentMember && (currentMember.role === 'Owner' || currentMember.role === 'Admin' || currentMember.role === 'Editor');
+                      const canDelete = checkDeletePermission();
                       const isSelected = selectedFolders.has(folder.id);
+                      const isDropdownOpen = openDropdown === folder.id;
                       
                       return (
                         <motion.div
@@ -774,34 +817,89 @@ export default function TeamSpace() {
                           whileHover={{ scale: 1.02, y: -4 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={(e) => {
-                            // 如果点击的是复选框区域或删除按钮，不导航
+                            // 如果点击的是复选框区域、删除按钮或下拉菜单，不导航
                             const target = e.target as HTMLElement;
-                            if (!target.closest('.checkbox-area') && !target.closest('button')) {
+                            if (!target.closest('.checkbox-area') && !target.closest('.action-area') && !target.closest('.dropdown-menu')) {
                               navigate(`/folder/${folder.id}`);
                             }
                           }}
                         >
-                          {/* 复选框 */}
-                          {canDelete && (
-                            <motion.div
-                              className="checkbox-area absolute top-3 left-3 z-10"
-                              onClick={(e) => toggleFolderSelection(folder.id, e)}
+                          {/* 复选框 - 所有文件夹都显示 */}
+                          <motion.div
+                            className="checkbox-area absolute top-3 left-3 z-10"
+                            onClick={(e) => {
+                              if (canDelete) {
+                                toggleFolderSelection(folder.id, e);
+                              } else {
+                                e.stopPropagation();
+                                alert('只有编辑者及以上权限可以选择文件夹');
+                              }
+                            }}
+                            whileHover={{ scale: canDelete ? 1.1 : 1 }}
+                            whileTap={{ scale: canDelete ? 0.9 : 1 }}
+                            title={canDelete ? (isSelected ? '取消选择' : '选择文件夹') : '需要编辑者及以上权限'}
+                          >
+                            {isSelected ? (
+                              <div className="p-1.5 rounded-lg bg-purple-600/20 border border-purple-500/50">
+                                <CheckSquare size={18} className="text-purple-400" />
+                              </div>
+                            ) : (
+                              <div className={`p-1.5 rounded-lg border transition-opacity ${
+                                canDelete 
+                                  ? 'bg-slate-800/50 border-slate-700/50 opacity-0 group-hover:opacity-100' 
+                                  : 'bg-slate-900/50 border-slate-800/50 opacity-50'
+                              }`}>
+                                <Square size={18} className="text-slate-400" />
+                              </div>
+                            )}
+                          </motion.div>
+                          
+                          {/* 右下角下拉菜单 */}
+                          <div className="action-area absolute bottom-3 right-3 z-10">
+                            <motion.button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenDropdown(isDropdownOpen ? null : folder.id);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
+                              title="更多操作"
                             >
-                              {isSelected ? (
-                                <div className="p-1.5 rounded-lg bg-purple-600/20 border border-purple-500/50">
-                                  <CheckSquare size={18} className="text-purple-400" />
-                                </div>
-                              ) : (
-                                <div className="p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Square size={18} className="text-slate-400" />
-                                </div>
-                              )}
-                            </motion.div>
-                          )}
+                              <MoreVertical size={16} />
+                            </motion.button>
+                            
+                            {/* 下拉菜单 */}
+                            {isDropdownOpen && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="dropdown-menu absolute bottom-full right-0 mb-2 w-32 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl overflow-hidden z-20"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {canDelete ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenDropdown(null);
+                                      handleDeleteFolder(folder.id, folder.name, e);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                                  >
+                                    <Trash2 size={14} />
+                                    删除文件夹
+                                  </button>
+                                ) : (
+                                  <div className="px-4 py-2 text-xs text-slate-500">
+                                    需要编辑者权限
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </div>
                           
-                          {/* 删除按钮 */}
+                          {/* 右上角删除按钮（备选，悬停时显示） */}
                           {canDelete && (
                             <motion.button
                               onClick={(e) => handleDeleteFolder(folder.id, folder.name, e)}
