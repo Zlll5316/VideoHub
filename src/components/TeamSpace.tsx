@@ -153,6 +153,37 @@ export default function TeamSpace() {
         if (memberError && memberError.code !== '42P01') {
           console.warn('添加成员失败（可能表不存在）:', memberError);
         }
+      } else {
+        // 团队已存在，检查当前用户是否是成员
+        const { data: existingMembers, error: checkError } = await supabase
+          .from('team_members')
+          .select('*')
+          .eq('team_id', teamInfo.id)
+          .eq('user_id', currentUser.id);
+
+        if (checkError && checkError.code !== '42P01') {
+          console.warn('检查成员失败:', checkError);
+        } else if (!existingMembers || existingMembers.length === 0) {
+          // 当前用户不是成员，自动添加为 Owner
+          console.log('⚠️ 当前用户不是团队成员，自动添加为 Owner...');
+          const { error: addMemberError } = await supabase
+            .from('team_members')
+            .insert({
+              team_id: teamInfo.id,
+              user_id: currentUser.id,
+              email: currentUser.email || '',
+              role: 'Owner',
+              status: 'Active',
+            });
+
+          if (addMemberError) {
+            console.error('自动添加成员失败:', addMemberError);
+            // 不阻止继续，让用户知道问题
+            alert(`⚠️ 检测到您不是团队成员，已尝试自动添加。\n\n如果仍然无法操作，请在 Supabase Dashboard 中手动将您的用户添加到 team_members 表，role 设置为 'Owner'。\n\n错误: ${addMemberError.message}`);
+          } else {
+            console.log('✅ 已自动添加当前用户为 Owner');
+          }
+        }
       }
 
       if (!teamInfo) {
@@ -230,6 +261,7 @@ export default function TeamSpace() {
       })
     );
 
+    console.log('📋 已加载成员列表:', membersWithInfo.map(m => ({ email: m.email, role: m.role, user_id: m.user_id })));
     setMembers(membersWithInfo);
   };
 
