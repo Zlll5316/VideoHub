@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserPlus, X, MoreVertical, Mail, FolderOpen, Plus, Loader2, Trash2, Edit2 } from 'lucide-react';
+import { UserPlus, X, Mail, FolderOpen, Plus, Loader2, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 

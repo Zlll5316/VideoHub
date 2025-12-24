@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Folder as FolderIcon, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import VideoCard from './VideoCard';
 
 interface FolderVideo {
   id: string;
