@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserPlus, X, Mail, FolderOpen, Plus, Loader2, Trash2 } from 'lucide-react';
+import { UserPlus, X, Mail, FolderOpen, Plus, Loader2, Trash2, CheckSquare, Square } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
@@ -53,6 +53,10 @@ export default function TeamSpace() {
   const [recentSaves, setRecentSaves] = useState<InspirationVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  
+  // 多选状态
+  const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 加载当前用户
   useEffect(() => {
@@ -455,6 +459,31 @@ export default function TeamSpace() {
     }
   };
 
+  // 切换文件夹选中状态
+  const toggleFolderSelection = (folderId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止触发文件夹点击事件
+    
+    setSelectedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  };
+
+  // 全选/取消全选
+  const toggleSelectAll = () => {
+    if (selectedFolders.size === folders.length) {
+      setSelectedFolders(new Set());
+    } else {
+      setSelectedFolders(new Set(folders.map(f => f.id)));
+    }
+  };
+
+  // 单个删除文件夹
   const handleDeleteFolder = async (folderId: string, folderName: string, e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止触发文件夹点击事件
     
@@ -469,20 +498,55 @@ export default function TeamSpace() {
 
     if (!confirm(`确定要删除文件夹 "${folderName}" 吗？\n\n删除后，文件夹内的所有视频分享记录也会被删除。`)) return;
 
+    await deleteFolders([folderId]);
+  };
+
+  // 批量删除文件夹
+  const handleBatchDelete = async () => {
+    if (!team || !currentUser || selectedFolders.size === 0) return;
+
+    // 检查当前用户权限
+    const currentMember = members.find(m => m.user_id === currentUser.id);
+    if (!currentMember || (currentMember.role !== 'Owner' && currentMember.role !== 'Admin' && currentMember.role !== 'Editor')) {
+      alert('只有编辑者及以上权限可以删除文件夹');
+      return;
+    }
+
+    const selectedFolderList = folders.filter(f => selectedFolders.has(f.id));
+    const folderNames = selectedFolderList.map(f => f.name).join('、');
+
+    if (!confirm(`确定要删除以下 ${selectedFolders.size} 个文件夹吗？\n\n${folderNames}\n\n删除后，文件夹内的所有视频分享记录也会被删除。`)) return;
+
+    await deleteFolders(Array.from(selectedFolders));
+  };
+
+  // 执行删除操作（支持单个和批量）
+  const deleteFolders = async (folderIds: string[]) => {
+    if (!team) return;
+
+    setIsDeleting(true);
     try {
+      // 批量删除
       const { error } = await supabase
         .from('team_folders')
         .delete()
-        .eq('id', folderId)
+        .in('id', folderIds)
         .eq('team_id', team.id);
 
       if (error) throw error;
 
-      alert('文件夹已删除');
+      alert(`成功删除 ${folderIds.length} 个文件夹`);
+      
+      // 清空选中状态
+      setSelectedFolders(new Set());
+      
+      // 刷新文件夹列表
       await loadFolders(team.id);
     } catch (error: any) {
       console.error('删除文件夹失败:', error);
       alert(`删除文件夹失败: ${error.message || '未知错误'}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -629,16 +693,62 @@ export default function TeamSpace() {
               {/* 上半部分：文件夹区域 */}
               <div>
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-medium text-white">📁 所有文件夹</h3>
-                  <motion.button
-                    onClick={handleCreateFolder}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all border border-transparent hover:border-slate-700/50"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Plus size={16} />
-                    新建文件夹
-                  </motion.button>
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-lg font-medium text-white">📁 所有文件夹</h3>
+                    {folders.length > 0 && (
+                      <motion.button
+                        onClick={toggleSelectAll}
+                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all border border-transparent hover:border-slate-700/50"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        title={selectedFolders.size === folders.length ? '取消全选' : '全选'}
+                      >
+                        {selectedFolders.size === folders.length ? (
+                          <CheckSquare size={14} className="text-purple-400" />
+                        ) : (
+                          <Square size={14} />
+                        )}
+                        <span>{selectedFolders.size === folders.length ? '取消全选' : '全选'}</span>
+                      </motion.button>
+                    )}
+                    {selectedFolders.size > 0 && (
+                      <span className="text-sm text-slate-400">
+                        已选择 {selectedFolders.size} 个
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedFolders.size > 0 && (
+                      <motion.button
+                        onClick={handleBatchDelete}
+                        disabled={isDeleting}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all border border-red-500/30 disabled:opacity-50"
+                        whileHover={{ scale: isDeleting ? 1 : 1.05 }}
+                        whileTap={{ scale: isDeleting ? 1 : 0.95 }}
+                      >
+                        {isDeleting ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            删除中...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 size={14} />
+                            批量删除 ({selectedFolders.size})
+                          </>
+                        )}
+                      </motion.button>
+                    )}
+                    <motion.button
+                      onClick={handleCreateFolder}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all border border-transparent hover:border-slate-700/50"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <Plus size={16} />
+                      新建文件夹
+                    </motion.button>
+                  </div>
                 </div>
                 {folders.length === 0 ? (
                   <div className="premium-card p-12 text-center">
@@ -650,6 +760,7 @@ export default function TeamSpace() {
                     {folders.map((folder, index) => {
                       const currentMember = members.find(m => m.user_id === currentUser?.id);
                       const canDelete = currentMember && (currentMember.role === 'Owner' || currentMember.role === 'Admin' || currentMember.role === 'Editor');
+                      const isSelected = selectedFolders.has(folder.id);
                       
                       return (
                         <motion.div
@@ -657,11 +768,39 @@ export default function TeamSpace() {
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: index * 0.05 }}
-                          className="premium-card p-6 cursor-pointer group relative"
+                          className={`premium-card p-6 cursor-pointer group relative transition-all ${
+                            isSelected ? 'ring-2 ring-purple-500/50 bg-purple-500/10' : ''
+                          }`}
                           whileHover={{ scale: 1.02, y: -4 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => navigate(`/folder/${folder.id}`)}
+                          onClick={(e) => {
+                            // 如果点击的是复选框区域或删除按钮，不导航
+                            const target = e.target as HTMLElement;
+                            if (!target.closest('.checkbox-area') && !target.closest('button')) {
+                              navigate(`/folder/${folder.id}`);
+                            }
+                          }}
                         >
+                          {/* 复选框 */}
+                          {canDelete && (
+                            <motion.div
+                              className="checkbox-area absolute top-3 left-3 z-10"
+                              onClick={(e) => toggleFolderSelection(folder.id, e)}
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              {isSelected ? (
+                                <div className="p-1.5 rounded-lg bg-purple-600/20 border border-purple-500/50">
+                                  <CheckSquare size={18} className="text-purple-400" />
+                                </div>
+                              ) : (
+                                <div className="p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Square size={18} className="text-slate-400" />
+                                </div>
+                              )}
+                            </motion.div>
+                          )}
+                          
                           {/* 删除按钮 */}
                           {canDelete && (
                             <motion.button
@@ -679,7 +818,11 @@ export default function TeamSpace() {
                             <div className="p-2 rounded-lg bg-gradient-to-br from-blue-600/30 to-purple-600/30 border border-blue-500/30">
                               <FolderOpen className="text-blue-400" size={20} />
                             </div>
-                            <h3 className="text-lg font-bold text-white flex-1">{folder.name}</h3>
+                            <h3 className={`text-lg font-bold flex-1 ${
+                              isSelected ? 'text-purple-300' : 'text-white'
+                            }`}>
+                              {folder.name}
+                            </h3>
                           </div>
                           <div className="flex items-center justify-between text-sm text-slate-400">
                             <span>{folder.count} 个视频</span>
