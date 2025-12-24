@@ -6,7 +6,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 # ✅ 修复点1：更稳健的字幕库引入
 from youtube_transcript_api import YouTubeTranscriptApi
-import google.generativeai as genai
+from youtube_transcript_api.proxies import GenericProxyConfig  # ✅ 添加代理支持
+from google import genai  # ✅ 使用新的 google-genai SDK
 import uvicorn
 import yt_dlp
 
@@ -16,13 +17,21 @@ import yt_dlp
 PROXY_URL = "http://10.20.160.120:8118" 
 os.environ["http_proxy"] = PROXY_URL
 os.environ["https_proxy"] = PROXY_URL
+
+# ✅ 为 youtube-transcript-api 配置代理
+proxy_config = GenericProxyConfig(
+    http_url=PROXY_URL,
+    https_url=PROXY_URL
+)
 print(f"🌍 代理配置已应用: {PROXY_URL}")
 
 # ==========================================
-# 🔑 Gemini API 配置
+# 🔑 Gemini API 配置（使用新的 SDK）
 # ==========================================
-API_KEY = "AIzaSyDqP7Af3GU_e6J3aJeFyvdpK7oKkgBA2rM"
-genai.configure(api_key=API_KEY)
+API_KEY = "AIzaSyAGiN3DVEceja0oepdl1RHp4Rbe03Ongzo"
+os.environ["GOOGLE_API_KEY"] = API_KEY  # 新 SDK 使用环境变量
+client = genai.Client()  # 初始化客户端（自动从环境变量读取 API Key）
+print(f"✅ Gemini API 客户端已初始化")
 
 app = FastAPI()
 app.add_middleware(
@@ -57,47 +66,43 @@ async def analyze(video_id: str):
     full_text = ""
     try:
         print("   1️⃣ 正在抓取字幕...")
-        # ✅ 修复点2：直接调用，不做复杂处理，防报错
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['zh-Hans', 'zh-Hant', 'en', 'en-US'])
-        for t in transcript_list:
-            full_text += t['text'] + " "
-        print(f"   ✅ 字幕获取成功 (长度: {len(full_text)})")
+        # ✅ 修复：使用正确的 API 调用方式，并传入代理配置
+        api = YouTubeTranscriptApi(proxy_config=proxy_config)
+        transcript = api.fetch(video_id, languages=['zh-Hans', 'zh-Hant', 'en', 'en-US'])
+        # transcript 是 FetchedTranscript 对象，可以直接迭代，每个 item 有 text 属性
+        snippet_count = 0
+        for snippet in transcript:
+            full_text += snippet.text + " "
+            snippet_count += 1
+        print(f"   ✅ 字幕获取成功 (长度: {len(full_text)} 字符, {snippet_count} 条)")
     except Exception as e:
-        print(f"   ⚠️ 字幕获取失败: {e}")
-        # 兜底文本：防止 AI 没东西分析而崩溃
-        full_text = "该视频无字幕。这是一个关于科技产品的演示视频，画面现代，节奏明快。"
+        error_msg = str(e)
+        print(f"   ⚠️ 字幕获取失败: {error_msg}")
+        
+        # 识别特定的错误类型，提供更友好的提示
+        if 'blocking' in error_msg.lower() or 'blocked' in error_msg.lower():
+            return {
+                "status": "error",
+                "message": "YouTube 正在阻止请求\n\n⚠️  YouTube 检测到请求并进行了阻止。即使使用了代理，代理的 IP 地址也可能被 YouTube 阻止。\n\n可能原因：\n1. 代理 IP 地址被 YouTube 封禁\n2. 请求频率过高\n3. YouTube 对某些视频有特殊限制\n\n解决方案：\n1. 尝试其他有字幕的视频\n2. 等待一段时间后重试\n3. 如果持续失败，可能需要更换代理服务\n\n注意：这是 YouTube 的限制，不是代码问题。"
+            }
+        elif 'No transcript' in error_msg or 'transcript' in error_msg.lower():
+            return {
+                "status": "error",
+                "message": "视频没有字幕\n\n该视频可能没有字幕或字幕不可用。\n\n建议：\n1. 检查视频是否有字幕（在 YouTube 上查看）\n2. 尝试其他有字幕的视频"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"无法获取视频字幕\n\n错误: {error_msg[:300]}\n\n可能原因：\n1. 视频没有字幕\n2. 视频不可用\n3. 网络连接问题\n\n建议：\n1. 检查视频是否有字幕\n2. 尝试其他视频\n3. 检查网络和代理设置"
+            }
 
-    # --- 2. AI 分析 ---
+    # --- 2. AI 分析（使用新的 SDK）---
     try:
-        print("   2️⃣ 正在呼叫 Gemini AI...")
+        print("   2️⃣ 正在呼叫 Gemini AI (新 SDK)...")
         
-        # ✅ 修复点3：使用已验证可用的模型（带 models/ 前缀）
-        # 从 API 列表获取的可用模型
-        model = None
-        model_names = [
-            'models/gemini-2.0-flash',        # ✅ 已验证可用，快速稳定
-            'models/gemini-2.0-flash-lite',    # ✅ 轻量版，成本更低
-            'models/gemini-2.5-flash',         # ✅ 最新版本
-            'models/gemini-2.5-pro',           # ✅ 专业版
-            'models/gemini-2.0-flash-001',     # 带版本号
-            'models/gemini-2.0-flash-exp',     # 实验版
-        ]
-        
-        for model_name in model_names:
-            try:
-                model = genai.GenerativeModel(model_name)
-                print(f"   📡 使用模型: {model_name}")
-                break
-            except Exception as e:
-                error_msg = str(e)
-                if '404' in error_msg or 'not found' in error_msg.lower():
-                    print(f"   ⚠️ 模型 {model_name} 不存在，尝试下一个...")
-                else:
-                    print(f"   ⚠️ 模型 {model_name} 错误: {error_msg[:60]}")
-                continue
-        
-        if model is None:
-            raise Exception("所有 Gemini 模型都不可用。\n\n可能原因：\n1. API Key 无效或配额已用完\n2. 网络连接问题\n3. API 版本不匹配\n\n建议：\n1. 检查 API Key: https://aistudio.google.com/app/apikey\n2. 查看配额使用情况\n3. 检查网络和代理设置")
+        # ✅ 使用新的 SDK 和推荐的模型
+        model_name = "gemini-2.5-flash"  # 根据快速入门指南使用
+        print(f"   📡 使用模型: {model_name}")
         
         prompt = f"""
         你是一个专业的视频分析师。请分析以下视频字幕，返回纯 JSON 数据。
@@ -117,7 +122,11 @@ async def analyze(video_id: str):
         }}
         """
         
-        response = model.generate_content(prompt)
+        # ✅ 使用新的 SDK 调用方式
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt
+        )
         clean_text = response.text.replace("```json", "").replace("```", "").strip()
         
         try:

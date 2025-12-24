@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Heart, Share2, Loader2, Activity, Layers, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Heart, Share2, Loader2, Activity, Layers, AlertCircle, FolderPlus, X } from 'lucide-react';
 import { Palette } from 'color-thief-react';
-import localJsonData from '../assets/youtube_data.json'; 
+import localJsonData from '../assets/youtube_data.json';
+import { supabase } from '../lib/supabase'; 
 
 export default function VideoDetail() {
   const { id } = useParams();
@@ -28,10 +29,137 @@ export default function VideoDetail() {
   
   // 收藏状态
   const [isLiked, setIsLiked] = useState(false);
+  
+  // 分享到团队状态
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [teamFolders, setTeamFolders] = useState<any[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
 
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // 加载团队文件夹
+  const loadTeamFolders = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert('请先登录');
+        return;
+      }
+
+      // 获取用户的团队
+      const { data: team } = await supabase
+        .from('teams')
+        .select('id')
+        .eq('owner_id', user.id)
+        .limit(1)
+        .single();
+
+      if (!team) {
+        alert('请先在团队空间创建团队');
+        return;
+      }
+
+      // 获取团队文件夹
+      const { data: folders, error } = await supabase
+        .from('team_folders')
+        .select('*')
+        .eq('team_id', team.id)
+        .order('name');
+
+      if (error) throw error;
+      setTeamFolders(folders || []);
+    } catch (error: any) {
+      console.error('加载团队文件夹失败:', error);
+      alert(`加载失败: ${error.message || '未知错误'}`);
+    }
+  };
+
+  // 分享视频到团队
+  const handleShareToTeam = async () => {
+    if (!id || !selectedFolder) {
+      alert('请选择文件夹');
+      return;
+    }
+
+    setIsSharing(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert('请先登录');
+        return;
+      }
+
+      // 获取团队 ID
+      const { data: team } = await supabase
+        .from('team_folders')
+        .select('team_id')
+        .eq('id', selectedFolder)
+        .single();
+
+      if (!team) {
+        alert('文件夹不存在');
+        return;
+      }
+
+      // 检查视频是否已在 Supabase 中
+      let videoId = id;
+      const { data: existingVideo } = await supabase
+        .from('videos')
+        .select('id')
+        .eq('url', video?.url || video?.videoSource || '')
+        .single();
+
+      if (!existingVideo) {
+        // 如果视频不在数据库中，先创建
+        const { data: newVideo, error: createError } = await supabase
+          .from('videos')
+          .insert({
+            title: video?.title || video?.videoName || '未知标题',
+            url: video?.url || video?.videoSource || '',
+            thumbnail_url: video?.coverUrl || video?.coverImage || '',
+            tags: video?.tags || [],
+            user_id: user.id,
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        videoId = newVideo.id;
+      } else {
+        videoId = existingVideo.id;
+      }
+
+      // 分享到团队文件夹
+      const { error: shareError } = await supabase
+        .from('team_videos')
+        .insert({
+          team_id: team.team_id,
+          folder_id: selectedFolder,
+          video_id: videoId,
+          added_by: user.id,
+        });
+
+      if (shareError) {
+        if (shareError.code === '23505') {
+          alert('该视频已经在此文件夹中');
+        } else {
+          throw shareError;
+        }
+      } else {
+        alert('视频已分享到团队！');
+        setIsShareModalOpen(false);
+        setSelectedFolder(null);
+      }
+    } catch (error: any) {
+      console.error('分享失败:', error);
+      alert(`分享失败: ${error.message || '未知错误'}`);
+    } finally {
+      setIsSharing(false);
+    }
+  };
   
   // 加载收藏状态
   useEffect(() => {
@@ -295,15 +423,11 @@ export default function VideoDetail() {
            </button>
            <button 
              onClick={async () => {
-               try {
-                 await navigator.clipboard.writeText(window.location.href);
-                 alert('链接已复制到剪贴板');
-               } catch (e) {
-                 alert('复制失败，请手动复制链接');
-               }
+               await loadTeamFolders();
+               setIsShareModalOpen(true);
              }}
              className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 transition"
-             title="分享"
+             title="分享到团队"
            >
              <Share2 className="w-5 h-5" />
            </button>
@@ -580,6 +704,86 @@ export default function VideoDetail() {
           </div>
         </div>
       </div>
+
+      {/* 分享到团队模态框 */}
+      {isShareModalOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            onClick={() => setIsShareModalOpen(false)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md backdrop-blur-xl bg-slate-900/80 border border-white/10 rounded-xl shadow-[0_0_40px_rgba(147,51,234,0.2)] p-8 relative">
+              <button
+                onClick={() => setIsShareModalOpen(false)}
+                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-purple-600/30 to-blue-600/30 border border-purple-500/30">
+                  <Share2 className="text-purple-400" size={24} />
+                </div>
+                <h2 className="text-2xl font-bold text-white">分享到团队</h2>
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-400 mb-2">
+                  选择文件夹
+                </label>
+                {teamFolders.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <FolderPlus className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>还没有文件夹</p>
+                    <p className="text-xs mt-2">请在团队空间创建文件夹</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {teamFolders.map((folder) => (
+                      <button
+                        key={folder.id}
+                        onClick={() => setSelectedFolder(folder.id)}
+                        className={`w-full px-4 py-3 text-left rounded-lg border transition-all ${
+                          selectedFolder === folder.id
+                            ? 'bg-purple-600/20 border-purple-500/50 text-white'
+                            : 'bg-slate-800/50 border-slate-700/50 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <FolderPlus size={18} />
+                          <span className="font-medium">{folder.name}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-4 justify-end">
+                <button
+                  onClick={() => setIsShareModalOpen(false)}
+                  disabled={isSharing}
+                  className="px-6 py-3 bg-slate-800/50 text-slate-300 rounded-lg font-medium hover:bg-slate-800 transition-all border border-slate-700/50 disabled:opacity-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleShareToTeam}
+                  disabled={!selectedFolder || isSharing || teamFolders.length === 0}
+                  className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold shadow-[0_0_20px_rgba(147,51,234,0.5)] hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                >
+                  {isSharing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      分享中...
+                    </>
+                  ) : (
+                    '确认分享'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
