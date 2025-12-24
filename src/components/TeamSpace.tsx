@@ -153,37 +153,6 @@ export default function TeamSpace() {
         if (memberError && memberError.code !== '42P01') {
           console.warn('添加成员失败（可能表不存在）:', memberError);
         }
-      } else {
-        // 团队已存在，检查当前用户是否是成员
-        const { data: existingMembers, error: checkError } = await supabase
-          .from('team_members')
-          .select('*')
-          .eq('team_id', teamInfo.id)
-          .eq('user_id', currentUser.id);
-
-        if (checkError && checkError.code !== '42P01') {
-          console.warn('检查成员失败:', checkError);
-        } else if (!existingMembers || existingMembers.length === 0) {
-          // 当前用户不是成员，自动添加为 Owner
-          console.log('⚠️ 当前用户不是团队成员，自动添加为 Owner...');
-          const { error: addMemberError } = await supabase
-            .from('team_members')
-            .insert({
-              team_id: teamInfo.id,
-              user_id: currentUser.id,
-              email: currentUser.email || '',
-              role: 'Owner',
-              status: 'Active',
-            });
-
-          if (addMemberError) {
-            console.error('自动添加成员失败:', addMemberError);
-            // 不阻止继续，让用户知道问题
-            alert(`⚠️ 检测到您不是团队成员，已尝试自动添加。\n\n如果仍然无法操作，请在 Supabase Dashboard 中手动将您的用户添加到 team_members 表，role 设置为 'Owner'。\n\n错误: ${addMemberError.message}`);
-          } else {
-            console.log('✅ 已自动添加当前用户为 Owner');
-          }
-        }
       }
 
       if (!teamInfo) {
@@ -194,6 +163,39 @@ export default function TeamSpace() {
 
       // 2. 加载成员列表
       await loadMembers(teamInfo.id);
+
+      // 2.5. 检查并确保当前用户是成员（重要：在加载成员后立即检查）
+      const { data: currentMemberCheck } = await supabase
+        .from('team_members')
+        .select('*')
+        .eq('team_id', teamInfo.id)
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+
+      if (!currentMemberCheck) {
+        // 当前用户不是成员，立即添加为 Owner
+        console.log('⚠️ 检测到当前用户不在成员列表中，正在自动添加为 Owner...');
+        const { error: addError } = await supabase
+          .from('team_members')
+          .insert({
+            team_id: teamInfo.id,
+            user_id: currentUser.id,
+            email: currentUser.email || '',
+            role: 'Owner',
+            status: 'Active',
+          });
+
+        if (addError) {
+          console.error('❌ 自动添加成员失败:', addError);
+          alert(`⚠️ 检测到您不在团队成员列表中！\n\n已尝试自动添加，但失败：${addError.message}\n\n请手动在 Supabase Dashboard 中添加：\n1. 打开 team_members 表\n2. 插入新行：\n   - team_id: ${teamInfo.id}\n   - user_id: ${currentUser.id}\n   - email: ${currentUser.email}\n   - role: Owner\n   - status: Active`);
+        } else {
+          console.log('✅ 已成功添加当前用户为 Owner');
+          // 重新加载成员列表
+          await loadMembers(teamInfo.id);
+        }
+      } else {
+        console.log('✅ 当前用户已在成员列表中，角色:', currentMemberCheck.role);
+      }
 
       // 3. 加载文件夹
       await loadFolders(teamInfo.id);
