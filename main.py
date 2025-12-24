@@ -141,7 +141,12 @@ async def analyze(video_id: str):
         print(f"   ❌ AI 报错: {error_msg}")
         
         # 识别常见的API错误类型
-        if '429' in error_msg or 'quota' in error_msg.lower() or 'Quota' in error_msg:
+        if 'leaked' in error_msg.lower() or 'reported as leaked' in error_msg.lower():
+            return {
+                "status": "error",
+                "message": "API Key 已被标记为泄露\n\n⚠️  你的 API Key 已被 Google 标记为泄露，无法继续使用。\n\n解决方案：\n1. 访问 https://aistudio.google.com/app/apikey\n2. 删除旧的 API Key（如果还在）\n3. 创建新的 API Key\n4. 更新 main.py 中的 API_KEY 变量\n5. 重启后端服务\n\n⚠️  注意：不要在公开场合分享你的 API Key！"
+            }
+        elif '429' in error_msg or 'quota' in error_msg.lower() or 'Quota' in error_msg:
             return {
                 "status": "error",
                 "message": "API 配额已用完\n\n可能原因：\n1. 免费配额已用完\n2. 需要升级到付费计划\n\n解决方案：\n1. 访问 https://aistudio.google.com/app/apikey 查看配额\n2. 等待配额重置（通常24小时）\n3. 或升级到付费计划\n\n错误详情：" + error_msg[:200]
