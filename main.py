@@ -1,39 +1,31 @@
 import os
-import sys
-import json
+import time
 import requests
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-# ✅ 修复点1：更稳健的字幕库引入
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api.proxies import GenericProxyConfig  # ✅ 添加代理支持
-from google import genai  # ✅ 使用新的 google-genai SDK
-import uvicorn
-import yt_dlp
 
 # ==========================================
-# 🚨 网络配置 (根据你的环境)
+# 🚨 配置区域 (从环境变量读取，不要硬编码密钥)
 # ==========================================
-PROXY_URL = "http://10.20.160.120:8118" 
-os.environ["http_proxy"] = PROXY_URL
-os.environ["https_proxy"] = PROXY_URL
+# 从环境变量读取 Notion API Key（在本地开发时设置环境变量）
+NOTION_API_KEY = os.getenv("NOTION_API_KEY", "")
+if not NOTION_API_KEY:
+    print("⚠️ 警告: NOTION_API_KEY 未设置，请设置环境变量")
+DATABASE_ID = os.getenv("DATABASE_ID", "2d3e8a9a934180f08bf0f20a67aa1c62")
 
-# ✅ 为 youtube-transcript-api 配置代理
-proxy_config = GenericProxyConfig(
-    http_url=PROXY_URL,
-    https_url=PROXY_URL
-)
-print(f"🌍 代理配置已应用: {PROXY_URL}")
+MY_PROXIES = {
+    "http": "http://10.20.160.120:8118",
+    "https": "http://10.20.160.120:8118"
+}
+os.environ["http_proxy"] = MY_PROXIES["http"]
+os.environ["https_proxy"] = MY_PROXIES["https"]
 
+CACHE_DURATION = 300  
 # ==========================================
-# 🔑 Gemini API 配置（使用新的 SDK）
-# ==========================================
-API_KEY = "AIzaSyAGiN3DVEceja0oepdl1RHp4Rbe03Ongzo"
-os.environ["GOOGLE_API_KEY"] = API_KEY  # 新 SDK 使用环境变量
-client = genai.Client()  # 初始化客户端（自动从环境变量读取 API Key）
-print(f"✅ Gemini API 客户端已初始化")
 
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,150 +33,128 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 启动自检
-try:
-    requests.get("https://www.google.com", timeout=3)
-    print("✅ Google 连接测试通过！")
-except:
-    print("⚠️ 无法连接 Google，请检查代理！")
+NOTION_HEADERS = {
+    "Authorization": f"Bearer {NOTION_API_KEY}",
+    "Content-Type": "application/json",
+    "Notion-Version": "2022-06-28"
+}
 
-# 健康检查端点（前端必须要有这个才能检测后端状态）
-@app.get("/health")
-async def health_check():
-    """健康检查端点，用于前端检测后端是否运行"""
-    return {
-        "status": "ok",
-        "message": "后端服务运行正常",
-        "proxy": PROXY_URL
-    }
+global_cache = {"data": [], "last_updated": 0}
 
-@app.get("/analyze_video")
-async def analyze(video_id: str):
-    print(f"\n🤖 收到任务，视频ID: {video_id}")
+def get_youtube_thumbnail(url):
+    try:
+        video_id = ""
+        if "youtu.be" in url:
+            video_id = url.split("/")[-1].split("?")[0]
+        elif "v=" in url:
+            video_id = url.split("v=")[1].split("&")[0]
+        if video_id:
+            return f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+    except:
+        pass
+    return ""
+
+# 🛠️ 辅助函数：通用标签解析 (支持 Multi-select 和 Select)
+def parse_multi_select(prop_data):
+    if not prop_data: return []
+    # 如果是多选 (Multi-select)
+    if prop_data.get("type") == "multi_select":
+        return [t['name'] for t in prop_data.get("multi_select", [])]
+    # 如果是单选 (Select)
+    elif prop_data.get("type") == "select":
+        select_obj = prop_data.get("select")
+        return [select_obj['name']] if select_obj else []
+    return []
+
+@app.get("/fetch_video_list")
+async def fetch_notion_data():
+    current_time = time.time()
     
-    # --- 1. 获取字幕 ---
-    full_text = ""
-    try:
-        print("   1️⃣ 正在抓取字幕...")
-        # ✅ 修复：使用正确的 API 调用方式，并传入代理配置
-        api = YouTubeTranscriptApi(proxy_config=proxy_config)
-        transcript = api.fetch(video_id, languages=['zh-Hans', 'zh-Hant', 'en', 'en-US'])
-        # transcript 是 FetchedTranscript 对象，可以直接迭代，每个 item 有 text 属性
-        snippet_count = 0
-        for snippet in transcript:
-            full_text += snippet.text + " "
-            snippet_count += 1
-        print(f"   ✅ 字幕获取成功 (长度: {len(full_text)} 字符, {snippet_count} 条)")
-    except Exception as e:
-        error_msg = str(e)
-        print(f"   ⚠️ 字幕获取失败: {error_msg}")
-        
-        # 识别特定的错误类型，提供更友好的提示
-        if 'blocking' in error_msg.lower() or 'blocked' in error_msg.lower():
-            return {
-                "status": "error",
-                "message": "YouTube 正在阻止请求\n\n⚠️  YouTube 检测到请求并进行了阻止。即使使用了代理，代理的 IP 地址也可能被 YouTube 阻止。\n\n可能原因：\n1. 代理 IP 地址被 YouTube 封禁\n2. 请求频率过高\n3. YouTube 对某些视频有特殊限制\n\n解决方案：\n1. 尝试其他有字幕的视频\n2. 等待一段时间后重试\n3. 如果持续失败，可能需要更换代理服务\n\n注意：这是 YouTube 的限制，不是代码问题。"
-            }
-        elif 'No transcript' in error_msg or 'transcript' in error_msg.lower():
-            return {
-                "status": "error",
-                "message": "视频没有字幕\n\n该视频可能没有字幕或字幕不可用。\n\n建议：\n1. 检查视频是否有字幕（在 YouTube 上查看）\n2. 尝试其他有字幕的视频"
-            }
-        else:
-            return {
-                "status": "error",
-                "message": f"无法获取视频字幕\n\n错误: {error_msg[:300]}\n\n可能原因：\n1. 视频没有字幕\n2. 视频不可用\n3. 网络连接问题\n\n建议：\n1. 检查视频是否有字幕\n2. 尝试其他视频\n3. 检查网络和代理设置"
-            }
+    if current_time - global_cache["last_updated"] < CACHE_DURATION and global_cache["data"]:
+        print(f"🚀 [高速] 使用本地缓存")
+        return {"status": "success", "data": global_cache["data"]}
 
-    # --- 2. AI 分析（使用新的 SDK）---
+    print(f"\n🔄 [加载中] 正在连接 Notion (ID: {DATABASE_ID})...")
+    print(f"🔑 使用 Token: {NOTION_API_KEY[:10]}...") 
+
+    url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+    
     try:
-        print("   2️⃣ 正在呼叫 Gemini AI (新 SDK)...")
+        response = requests.post(url, headers=NOTION_HEADERS, proxies=MY_PROXIES, timeout=30)
         
-        # ✅ 使用新的 SDK 和推荐的模型
-        model_name = "gemini-2.5-flash"  # 根据快速入门指南使用
-        print(f"   📡 使用模型: {model_name}")
+        if response.status_code != 200:
+            print(f"❌ 读取失败 (代码 {response.status_code}): {response.text}")
+            return {"status": "error", "message": f"API token is invalid or network error."}
+
+        data = response.json()
+        results = data.get("results", [])
+        print(f"✅ 成功读取到 {len(results)} 条数据，正在分类解析...")
+
+        clean_videos = []
+        for page in results:
+            props = page.get("properties", {})
+            
+            # 1. 基础信息
+            title = "无标题"
+            name_col = props.get("名称", {})
+            if name_col.get("title"):
+                title = name_col["title"][0].get("plain_text", "无标题")
+
+            video_url = ""
+            url_col = props.get("URL", {})
+            if url_col.get("url"): video_url = url_col["url"]
+            elif url_col.get("rich_text") and len(url_col["rich_text"]) > 0:
+                video_url = url_col["rich_text"][0].get("plain_text", "")
+
+            analysis = "暂无分析内容"
+            analysis_col = props.get("视频分析", {})
+            if analysis_col.get("rich_text"):
+                analysis = "".join([t.get("plain_text", "") for t in analysis_col["rich_text"]])
+
+            # 2. 👇 核心修改：读取4个独立的分类列
+            # 注意：这里会尝试兼容 单选(Select) 和 多选(Multi-select)
+            company_tags = parse_multi_select(props.get("公司", {}))
+            type_tags = parse_multi_select(props.get("动画类型", {}))
+            technique_tags = parse_multi_select(props.get("表现手法", {}))
+            feature_tags = parse_multi_select(props.get("典型特征", {}))
+
+            # 3. 封面处理
+            cover_img = ""
+            cover_data = page.get("cover", {})
+            if cover_data:
+                if cover_data['type'] == 'external': cover_img = cover_data['external']['url']
+                elif cover_data['type'] == 'file': cover_img = cover_data['file']['url']
+            
+            if not cover_img and video_url:
+                cover_img = get_youtube_thumbnail(video_url)
+            if not cover_img:
+                cover_img = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop"
+
+            clean_videos.append({
+                "id": page["id"],
+                "title": title,
+                "url": video_url,
+                "analysis": analysis,
+                "cover": cover_img,
+                # 👇 将4个分类分别传给前端
+                "company": company_tags,
+                "animationType": type_tags,
+                "technique": technique_tags,
+                "features": feature_tags
+            })
+
+        global_cache["data"] = clean_videos
+        global_cache["last_updated"] = current_time
         
-        prompt = f"""
-        你是一个专业的视频分析师。请分析以下视频字幕，返回纯 JSON 数据。
-        
-        字幕内容：
-        {full_text[:3000]}
-        
-        请严格返回以下 JSON 格式（不要Markdown标记）：
-        {{
-            "visual_style": "描述视频视觉风格（配色、构图等）",
-            "motion_analysis": "描述动效节奏",
-            "script_structure": [
-                {{ "time": "0:00", "label": "开场", "summary": "内容简介" }},
-                {{ "time": "中段", "label": "核心", "summary": "内容简介" }},
-                {{ "time": "结尾", "label": "总结", "summary": "内容简介" }}
-            ]
-        }}
-        """
-        
-        # ✅ 使用新的 SDK 调用方式
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt
-        )
-        clean_text = response.text.replace("```json", "").replace("```", "").strip()
-        
-        try:
-            ai_data = json.loads(clean_text)
-            if "hexPalette" in ai_data: del ai_data["hexPalette"]
-            print("   ✅ 分析成功！")
-            return {"status": "success", "ai_result": ai_data}
-        except:
-            print("   ⚠️ JSON 解析失败，使用备用数据")
-            return {
-                "status": "success", 
-                "ai_result": {
-                    "visual_style": "现代科技风格，色彩明快。",
-                    "motion_analysis": "节奏流畅，转场迅速。",
-                    "script_structure": []
-                }
-            }
+        return {"status": "success", "data": clean_videos}
 
     except Exception as e:
-        error_msg = str(e)
-        print(f"   ❌ AI 报错: {error_msg}")
-        
-        # 识别常见的API错误类型
-        if 'leaked' in error_msg.lower() or 'reported as leaked' in error_msg.lower():
-            return {
-                "status": "error",
-                "message": "API Key 已被标记为泄露\n\n⚠️  你的 API Key 已被 Google 标记为泄露，无法继续使用。\n\n解决方案：\n1. 访问 https://aistudio.google.com/app/apikey\n2. 删除旧的 API Key（如果还在）\n3. 创建新的 API Key\n4. 更新 main.py 中的 API_KEY 变量\n5. 重启后端服务\n\n⚠️  注意：不要在公开场合分享你的 API Key！"
-            }
-        elif '429' in error_msg or 'quota' in error_msg.lower() or 'Quota' in error_msg:
-            return {
-                "status": "error",
-                "message": "API 配额已用完\n\n可能原因：\n1. 免费配额已用完\n2. 需要升级到付费计划\n\n解决方案：\n1. 访问 https://aistudio.google.com/app/apikey 查看配额\n2. 等待配额重置（通常24小时）\n3. 或升级到付费计划\n\n错误详情：" + error_msg[:200]
-            }
-        elif '403' in error_msg or 'permission' in error_msg.lower():
-            return {
-                "status": "error",
-                "message": "API 权限不足\n\n可能原因：\n1. API Key 无效或已过期\n2. 需要启用 API 服务\n\n解决方案：\n1. 检查 API Key 是否正确\n2. 访问 https://aistudio.google.com/app/apikey 重新生成\n3. 确保已启用 Gemini API"
-            }
-        elif '401' in error_msg or 'unauthorized' in error_msg.lower():
-            return {
-                "status": "error",
-                "message": "API Key 认证失败\n\n解决方案：\n1. 检查 main.py 中的 API_KEY 是否正确\n2. 访问 https://aistudio.google.com/app/apikey 获取新 Key"
-            }
-        elif '404' in error_msg or 'not found' in error_msg.lower():
-            return {
-                "status": "error",
-                "message": "模型不存在或不可用\n\n可能原因：\n1. 模型名称错误\n2. API 版本不匹配\n\n解决方案：\n1. 检查模型名称是否正确\n2. 查看后端日志获取详细信息"
-            }
-        else:
-            return {
-                "status": "error",
-                "message": f"AI 分析失败\n\n错误: {error_msg[:300]}\n\n建议：\n1. 检查网络连接\n2. 检查代理设置\n3. 查看后端日志获取详细信息"
-            }
+        print(f"❌ 代码报错: {e}")
+        return {"status": "error", "message": str(e)}
 
-@app.get("/fetch_latest_videos")
-async def fetch_latest_videos():
-    # 简化的获取视频接口，确保不报错
-    return {"status": "success", "count": 0, "videos": []}
+@app.get("/health")
+def health_check(): return {"status": "ok"}
 
 if __name__ == "__main__":
+    os.system("lsof -ti:8000 | xargs kill -9") 
     uvicorn.run(app, host="0.0.0.0", port=8000)

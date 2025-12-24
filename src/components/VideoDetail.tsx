@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Heart, Share2, Loader2, Activity, Layers, AlertCircle, FolderPlus, X } from 'lucide-react';
+import { ArrowLeft, Heart, Share2, Loader2, Layers, AlertCircle, FolderPlus, X } from 'lucide-react';
 import { Palette } from 'color-thief-react';
 import localJsonData from '../assets/youtube_data.json';
 import { supabase } from '../lib/supabase'; 
@@ -10,7 +10,8 @@ export default function VideoDetail() {
   const navigate = useNavigate();
   const [video, setVideo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'visual' | 'motion' | 'script'>('visual');
+  // 已移除：不再需要标签切换，统一显示所有分析内容
+  // const [activeTab, setActiveTab] = useState<'visual' | 'motion' | 'script'>('visual');
   
   // 获取后端 API URL（从环境变量或使用默认值）
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -211,162 +212,284 @@ export default function VideoDetail() {
     };
   }, [isResizing, resize, stopResizing]);
 
+  // 加载视频数据（优先从 Notion，然后从本地）
   useEffect(() => {
-    let allTasks: any[] = [];
-    const localStoreData = localStorage.getItem('tasks');
-    if (localStoreData) { try { allTasks = JSON.parse(localStoreData); } catch (e) {} }
-    if (localJsonData && Array.isArray(localJsonData)) { allTasks = [...allTasks, ...localJsonData]; }
-    const uniqueTasksMap = new Map();
-    allTasks.forEach((item: any) => { uniqueTasksMap.set(String(item.id), item); });
-    const foundVideo = uniqueTasksMap.get(String(id));
-    if (foundVideo) { setVideo(foundVideo); setLoading(false); } else { setLoading(false); }
+    const loadVideoData = async () => {
+      setLoading(true);
+      try {
+        console.log('🔍 VideoDetail: 开始加载视频数据，ID:', id);
+        
+        // 1. 优先从 Notion 加载
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        try {
+          const response = await fetch(`${API_URL}/fetch_video_list`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(60000) // 增加超时时间到60秒
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result.status === 'success' && result.data) {
+              // 查找匹配的视频（通过 ID 或 URL）
+              console.log(`🔍 VideoDetail: 在 ${result.data.length} 个视频中查找 ID: ${id}`);
+              
+              const notionVideo = result.data.find((item: any) => {
+                // 匹配 Notion ID
+                if (item.id === id) {
+                  console.log('✅ 通过 Notion ID 匹配:', item.id);
+                  return true;
+                }
+                // 匹配从 URL 提取的 YouTube ID
+                if (item.url) {
+                  if (item.url.includes('youtube.com/watch?v=')) {
+                    const videoId = item.url.split('v=')[1]?.split('&')[0];
+                    if (videoId === id) {
+                      console.log('✅ 通过 YouTube ID 匹配:', videoId);
+                      return true;
+                    }
+                  } else if (item.url.includes('youtu.be/')) {
+                    const videoId = item.url.split('youtu.be/')[1]?.split('?')[0];
+                    if (videoId === id) {
+                      console.log('✅ 通过 YouTube 短链接 ID 匹配:', videoId);
+                      return true;
+                    }
+                  }
+                  // 如果 URL 包含 ID（部分匹配）
+                  if (item.url.includes(id)) {
+                    console.log('✅ 通过 URL 部分匹配:', item.url);
+                    return true;
+                  }
+                }
+                return false;
+              });
+              
+              if (!notionVideo) {
+                console.warn('⚠️ VideoDetail: 在 Notion 数据中未找到匹配的视频');
+                console.log('前3个视频的ID和URL:', result.data.slice(0, 3).map((item: any) => ({
+                  id: item.id,
+                  url: item.url?.substring(0, 50)
+                })));
+              }
+              
+              if (notionVideo) {
+                // 转换为 Video 格式
+                let videoId = notionVideo.id;
+                if (notionVideo.url && notionVideo.url.includes('youtube.com/watch?v=')) {
+                  videoId = notionVideo.url.split('v=')[1]?.split('&')[0] || notionVideo.id;
+                } else if (notionVideo.url && notionVideo.url.includes('youtu.be/')) {
+                  videoId = notionVideo.url.split('youtu.be/')[1]?.split('?')[0] || notionVideo.id;
+                }
+                
+                const videoData = {
+                  id: videoId,
+                  title: notionVideo.title,
+                  videoName: notionVideo.title,
+                  url: notionVideo.url,
+                  videoSource: notionVideo.url,
+                  coverUrl: notionVideo.cover,
+                  coverImage: notionVideo.cover,
+                  tags: notionVideo.tags || [],
+                  analysis: notionVideo.analysis || '',
+                  sourceUrl: notionVideo.url
+                };
+                
+                console.log('✅ VideoDetail: 从 Notion 找到视频:', videoData.title);
+                setVideo(videoData);
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        } catch (notionError) {
+          console.warn('⚠️ VideoDetail: 从 Notion 加载失败，尝试本地数据:', notionError);
+        }
+        
+        // 2. 回退到本地数据
+        let allTasks: any[] = [];
+        const localStoreData = localStorage.getItem('tasks');
+        if (localStoreData) { 
+          try { 
+            allTasks = JSON.parse(localStoreData); 
+          } catch (e) {
+            console.error('解析本地任务数据失败:', e);
+          }
+        }
+        if (localJsonData && Array.isArray(localJsonData)) { 
+          allTasks = [...allTasks, ...localJsonData]; 
+        }
+        
+        const uniqueTasksMap = new Map();
+        allTasks.forEach((item: any) => { 
+          uniqueTasksMap.set(String(item.id), item); 
+        });
+        
+        const foundVideo = uniqueTasksMap.get(String(id));
+        if (foundVideo) { 
+          console.log('✅ VideoDetail: 从本地数据找到视频:', foundVideo.title || foundVideo.videoName);
+          setVideo(foundVideo); 
+        } else {
+          console.warn('❌ VideoDetail: 未找到视频，ID:', id);
+        }
+      } catch (error) {
+        console.error('❌ VideoDetail: 加载视频数据失败:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadVideoData();
   }, [id]);
 
-  // 🔥 核心：请求 Python 后端（带重试机制和健康检查）
+  // 从 Notion 加载分析数据
   useEffect(() => {
     if (!id) return;
 
-    const checkBackendHealth = async (): Promise<boolean> => {
-      try {
-        const response = await fetch(`${API_URL}/health`, {
-          method: 'GET',
-          signal: AbortSignal.timeout(5000) // 5秒超时
-        });
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ 后端健康检查通过:', data);
-          return true;
-        }
-        return false;
-      } catch (e) {
-        console.warn('⚠️ 后端健康检查失败:', e);
-        return false;
-      }
-    };
-
-    const fetchRealData = async (retryCount = 0) => {
-        const maxRetries = 2;
+    // 从 Notion 加载分析数据
+    const loadAnalysisFromNotion = async () => {
         setAnalysis((prev:any) => ({ 
           ...prev, 
           status: 'loading', 
-          notes: retryCount > 0 ? `正在重试连接... (${retryCount}/${maxRetries})` : "正在连接 Python 后端..." 
+          notes: "正在从 Notion 加载分析数据..." 
         }));
 
         try {
-            // 先检查后端健康状态
-            if (retryCount === 0) {
-              console.log('🔍 检查后端健康状态...');
-              const isHealthy = await checkBackendHealth();
-              if (!isHealthy) {
-                throw new Error('BACKEND_NOT_RUNNING');
-              }
-            }
-
-            console.log(`🔍 开始分析视频 ID: ${id}`);
-            console.log(`📡 请求地址: ${API_URL}/analyze_video?video_id=${id}`);
+            console.log(`📡 从 Notion 加载视频分析数据...`);
             
-            // 请求后端 API，设置超时
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
-            
-            const response = await fetch(`${API_URL}/analyze_video?video_id=${id}`, {
-              signal: controller.signal,
+            const response = await fetch(`${API_URL}/fetch_video_list`, {
               method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-              }
+              headers: { 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(10000)
             });
             
-            clearTimeout(timeoutId);
-
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            const data = await response.json();
-            console.log('✅ 后端返回数据:', data);
+            const result = await response.json();
+            console.log('✅ Notion 返回数据:', result);
 
-            if (data.status === 'success') {
-                // ✅ 修复点：直接使用对象，不要再 JSON.parse 了
-                const aiData = data.ai_result;
-                
-                // 注意：不再使用 AI 返回的配色，而是从视频封面真实提取
-                setAnalysis({
-                    visual: { 
-                        style: aiData.visual_style || "未识别到风格", 
-                        status: 'done'
-                    },
-                    motion: { analysis: aiData.motion_analysis || "未识别到动效", status: 'done' },
-                    script: { structure: aiData.script_structure || [], status: 'done' },
-                    status: 'success',
-                    notes: "AI 分析成功"
+            if (result.status === 'success' && result.data) {
+                // 根据当前视频 ID 查找对应的 Notion 数据
+                // 尝试匹配：可能是完整的 Notion ID，也可能是从 URL 提取的 YouTube ID
+                const notionItem = result.data.find((item: any) => {
+                  // 如果 item.id 匹配
+                  if (item.id === id) return true;
+                  // 如果 item.url 包含当前 ID
+                  if (item.url && item.url.includes(id)) return true;
+                  // 如果从 item.url 提取的 YouTube ID 匹配
+                  if (item.url && item.url.includes('youtube.com/watch?v=')) {
+                    const videoId = item.url.split('v=')[1]?.split('&')[0];
+                    if (videoId === id) return true;
+                  }
+                  return false;
                 });
-                console.log('✅ AI 分析完成并已更新状态');
-            } else {
-                // 处理错误状态，确保错误信息能正确显示
-                const errorMsg = data.message || "AI 返回错误";
-                console.error('❌ 后端返回错误:', errorMsg);
                 
-                // 错误信息已经由后端格式化，直接使用
-                let errorDetails = errorMsg;
-                
-                // 如果是配额错误，添加更详细的说明
-                if (errorMsg.includes('配额') || errorMsg.includes('quota') || errorMsg.includes('Quota') || errorMsg.includes('429')) {
-                    errorDetails = errorMsg + "\n\n💡 提示：Google Gemini API 免费版有使用限制。如果需要更多配额，可以：\n1. 等待配额重置（通常24小时）\n2. 访问 https://aistudio.google.com/app/apikey 查看配额使用情况\n3. 考虑升级到付费计划";
+                if (notionItem && notionItem.analysis) {
+                    // Notion 的分析内容是纯文本，直接使用
+                    const analysisText = notionItem.analysis;
+                    
+                    // 尝试解析为 JSON（如果用户格式化了）
+                    let analysisData;
+                    try {
+                        analysisData = JSON.parse(analysisText);
+                    } catch {
+                        // 如果不是 JSON，当作纯文本处理，显示在所有 Tab 中
+                        analysisData = {
+                            visual_style: analysisText,
+                            motion_analysis: analysisText,
+                            script_structure: []
+                        };
+                    }
+                    
+                    setAnalysis({
+                        visual: { 
+                            style: analysisData.visual_style || analysisText || "暂无分析内容", 
+                            status: 'done'
+                        },
+                        motion: { 
+                            analysis: analysisData.motion_analysis || analysisText || "暂无分析内容", 
+                            status: 'done' 
+                        },
+                        script: { 
+                            structure: analysisData.script_structure || [], 
+                            status: 'done' 
+                        },
+                        status: 'success',
+                        notes: `已从 Notion 加载分析数据 (${analysisText.length} 字符)`
+                    });
+                    
+                    console.log('✅ 从 Notion 加载分析数据成功，长度:', analysisText.length);
+                } else {
+                    // 没有找到对应的分析数据
+                    setAnalysis({
+                        visual: { 
+                            style: "该视频在 Notion 中暂无分析内容，请在 Notion 中补充", 
+                            status: 'done'
+                        },
+                        motion: { 
+                            analysis: "该视频在 Notion 中暂无分析内容，请在 Notion 中补充", 
+                            status: 'done' 
+                        },
+                        script: { 
+                            structure: [], 
+                            status: 'done' 
+                        },
+                        status: 'success',
+                        notes: "Notion 中暂无此视频的分析内容"
+                    });
                 }
-                
-                setAnalysis((prev:any) => ({ 
-                    ...prev, 
-                    status: 'error', 
-                    notes: "AI 分析失败",
-                    errorDetails: errorDetails
-                }));
-                return; // 直接返回，不再抛出错误
+            } else {
+                throw new Error('Notion 返回数据格式错误');
             }
         } catch (e: any) {
-            console.error("❌ 连接失败:", e);
-            
-            // 如果是网络错误且还有重试次数，则重试
-            if (retryCount < maxRetries && (e.name === 'TypeError' || e.name === 'AbortError')) {
-              console.log(`🔄 准备重试 (${retryCount + 1}/${maxRetries})...`);
-              setTimeout(() => {
-                fetchRealData(retryCount + 1);
-              }, 2000); // 2秒后重试
-              return;
-            }
-            
-            // 最终失败，显示详细的错误信息
-            let errorMessage = "连接失败！";
-            let errorDetails = "";
-            
-            if (e.message === 'BACKEND_NOT_RUNNING') {
-              errorMessage = "后端服务未运行";
-              errorDetails = "请按照以下步骤操作：\n1. 打开终端，进入项目目录\n2. 运行命令: python main.py\n3. 等待看到 '✅ Google 连接测试通过！后端服务准备就绪。'\n4. 刷新此页面";
-            } else if (e.name === 'AbortError') {
-              errorMessage = "请求超时（30秒）";
-              errorDetails = "后端响应时间过长。可能是网络问题或代理配置错误。";
-            } else if (e.message?.includes('Failed to fetch') || e.name === 'TypeError') {
-              errorMessage = "无法连接到后端服务";
-              errorDetails = `请确保：\n1. Python 后端 (main.py) 正在运行\n2. 后端运行在 ${API_URL}\n3. 检查终端是否有错误信息`;
-            } else {
-              errorMessage = `错误: ${e.message || e.toString()}`;
-              errorDetails = "请查看浏览器控制台获取详细错误信息";
-            }
+            console.error("❌ 从 Notion 加载失败:", e);
             
             setAnalysis((prev:any) => ({ 
                 ...prev, 
                 status: 'error', 
-                notes: errorMessage,
-                errorDetails: errorDetails
+                notes: "无法从 Notion 加载分析数据",
+                errorDetails: `错误: ${e.message || e.toString()}\n\n请确保：\n1. 后端服务正在运行\n2. Notion API 配置正确\n3. 该视频在 Notion 数据库中存在`
             }));
         }
     };
 
-    fetchRealData();
+    loadAnalysisFromNotion();
   }, [id]);
 
-  if (loading) return <div className="p-10 flex items-center justify-center text-white">加载中...</div>;
-  if (!video) return <div className="p-10 text-white">视频未找到 ID: {id}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col bg-black text-white font-sans w-full h-screen overflow-hidden">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-slate-400">正在加载视频详情...</p>
+            <p className="text-slate-500 text-xs mt-2">ID: {id}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!video) {
+    return (
+      <div className="flex flex-col bg-black text-white font-sans w-full h-screen overflow-hidden">
+        <div className="h-14 px-6 border-b border-gray-800 flex items-center bg-black shrink-0">
+          <button onClick={() => navigate(-1)} className="flex items-center text-gray-400 hover:text-white transition">
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            <span className="font-medium">返回</span>
+          </button>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-red-400 text-lg mb-2">视频未找到</p>
+            <p className="text-slate-400 text-sm">ID: {id}</p>
+            <p className="text-slate-500 text-xs mt-4">请检查视频 ID 是否正确，或返回上一页</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const title = video.title || video.videoName || "无标题";
   const videoUrl = video.url || video.videoSource;
@@ -382,16 +505,35 @@ export default function VideoDetail() {
 
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
-    if (url.includes('embed')) return url;
-    try { const vId = url.split('v=')[1]?.split('&')[0] || url.split('/').pop(); if (vId) return `https://www.youtube.com/embed/${vId}`; } catch (e) { return url; }
-    return url;
+    
+    // 如果已经是嵌入链接，直接返回
+    if (url.includes('embed') || url.includes('player')) return url;
+    
+    try {
+      // YouTube 支持
+      if (url.includes('youtube.com/watch?v=')) {
+        const vId = url.split('v=')[1]?.split('&')[0];
+        if (vId) return `https://www.youtube.com/embed/${vId}`;
+      } else if (url.includes('youtu.be/')) {
+        const vId = url.split('youtu.be/')[1]?.split('?')[0];
+        if (vId) return `https://www.youtube.com/embed/${vId}`;
+      }
+      
+      // Vimeo 支持
+      if (url.includes('vimeo.com/')) {
+        const vId = url.split('vimeo.com/')[1]?.split('?')[0];
+        if (vId) return `https://player.vimeo.com/video/${vId}`;
+      }
+      
+      // 其他情况返回原 URL
+      return url;
+    } catch (e) {
+      console.error('解析视频 URL 失败:', e);
+      return url;
+    }
   };
 
-  const TabButton = ({ name, label, icon }: { name: typeof activeTab, label: string, icon?: React.ReactNode }) => (
-    <button onClick={() => setActiveTab(name)} className={`flex-1 flex items-center justify-center py-4 text-sm font-medium border-b-2 transition-all ${activeTab === name ? 'border-blue-500 text-blue-400 bg-gray-900' : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-900/50'}`}>
-      {icon} <span className={icon ? "ml-2" : ""}>{label}</span>
-    </button>
-  );
+  // 已移除：不再需要 TabButton 组件
 
   const AnalysisSection = ({ title, children, loading=false }: any) => (
       <section className="border-b border-gray-800 pb-6 last:border-0 last:pb-0">
@@ -444,10 +586,33 @@ export default function VideoDetail() {
           <div className="p-8 flex-1">
             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center"><Layers className="w-4 h-4 mr-2"/> Keyframe Storyboard</h3>
              <div className="grid grid-cols-4 gap-4">
-                <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"><img src={`https://img.youtube.com/vi/${String(id)}/1.jpg`} className="w-full h-full object-cover opacity-80"/></div>
-                <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"><img src={`https://img.youtube.com/vi/${String(id)}/2.jpg`} className="w-full h-full object-cover opacity-80"/></div>
-                <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"><img src={`https://img.youtube.com/vi/${String(id)}/3.jpg`} className="w-full h-full object-cover opacity-80"/></div>
-                <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden"><img src={`https://img.youtube.com/vi/${String(id)}/0.jpg`} className="w-full h-full object-cover opacity-80"/></div>
+                {/* 从视频 URL 提取 ID 用于关键帧 */}
+                {(() => {
+                  let videoId = String(id);
+                  if (videoUrl) {
+                    if (videoUrl.includes('youtube.com/watch?v=')) {
+                      videoId = videoUrl.split('v=')[1]?.split('&')[0] || videoId;
+                    } else if (videoUrl.includes('youtu.be/')) {
+                      videoId = videoUrl.split('youtu.be/')[1]?.split('?')[0] || videoId;
+                    }
+                  }
+                  return (
+                    <>
+                      <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                        <img src={`https://img.youtube.com/vi/${videoId}/1.jpg`} className="w-full h-full object-cover opacity-80" onError={(e) => { (e.target as HTMLImageElement).src = coverImageUrl; }} />
+                      </div>
+                      <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                        <img src={`https://img.youtube.com/vi/${videoId}/2.jpg`} className="w-full h-full object-cover opacity-80" onError={(e) => { (e.target as HTMLImageElement).src = coverImageUrl; }} />
+                      </div>
+                      <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                        <img src={`https://img.youtube.com/vi/${videoId}/3.jpg`} className="w-full h-full object-cover opacity-80" onError={(e) => { (e.target as HTMLImageElement).src = coverImageUrl; }} />
+                      </div>
+                      <div className="aspect-video bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                        <img src={`https://img.youtube.com/vi/${videoId}/0.jpg`} className="w-full h-full object-cover opacity-80" onError={(e) => { (e.target as HTMLImageElement).src = coverImageUrl; }} />
+                      </div>
+                    </>
+                  );
+                })()}
             </div>
             <p className="text-xs text-gray-500 mt-2">* 关键帧由 YouTube 自动生成。</p>
           </div>
@@ -458,13 +623,27 @@ export default function VideoDetail() {
         </div>
 
         <div ref={sidebarRef} style={{ width: sidebarWidth }} className="border-l border-gray-800 bg-black flex flex-col shrink-0 h-full relative z-20">
-          <div className="flex shrink-0 border-b border-gray-800">
-            <TabButton name="visual" label="视觉" icon={<span>🎨</span>} />
-            <TabButton name="motion" label="动效" icon={<span>⚡️</span>} />
-            <TabButton name="script" label="脚本" icon={<span>📝</span>} />
+          {/* 统一的"视频分析"标题 */}
+          <div className="flex shrink-0 border-b border-gray-800 px-6 py-4">
+            <h3 className="text-lg font-semibold text-white">视频分析</h3>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
+            {/* 降级模式提示 - 显示为警告，不是错误 */}
+            {analysis.status === 'success' && analysis.degraded && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg text-yellow-400 text-xs mb-4">
+                    <div className="flex gap-2 items-start mb-3">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <div className="font-semibold mb-1">⚠️ YouTube 拦截提示</div>
+                            <div className="text-yellow-300/80 whitespace-pre-line text-[10px] leading-relaxed mt-2">
+                                {analysis.degradedMessage || "YouTube 拦截了请求，请检查 cookies.txt 文件或稍后重试。"}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
             {analysis.status === 'error' && (
                 <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-lg text-red-400 text-xs mb-4">
                     <div className="flex gap-2 items-start mb-3">
@@ -508,39 +687,68 @@ export default function VideoDetail() {
                                         notes: "正在重新分析..." 
                                     }));
                                     
-                                    const response = await fetch(`${API_URL}/analyze_video?video_id=${id}`, {
+                                    // 重新从 Notion 加载
+                                    const response = await fetch(`${API_URL}/fetch_video_list`, {
                                       method: 'GET',
                                       headers: { 'Content-Type': 'application/json' }
                                     });
                                     
                                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                                     
-                                    const data = await response.json();
-                                    if (data.status === 'success') {
-                                        const aiData = data.ai_result;
-                                        setAnalysis({
-                                            visual: { 
-                                                style: aiData.visual_style || "未识别到风格", 
-                                                status: 'done'
-                                            },
-                                            motion: { analysis: aiData.motion_analysis || "未识别到动效", status: 'done' },
-                                            script: { structure: aiData.script_structure || [], status: 'done' },
-                                            status: 'success',
-                                            notes: "AI 分析成功"
+                                    const result = await response.json();
+                                    if (result.status === 'success' && result.data) {
+                                        const notionItem = result.data.find((item: any) => {
+                                          if (item.id === id) return true;
+                                          if (item.url && item.url.includes(id)) return true;
+                                          if (item.url && item.url.includes('youtube.com/watch?v=')) {
+                                            const videoId = item.url.split('v=')[1]?.split('&')[0];
+                                            if (videoId === id) return true;
+                                          }
+                                          return false;
                                         });
-                                    } else {
-                                        const errorMsg = data.message || "AI 返回错误";
-                                        let errorDetails = "";
-                                        if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('Quota')) {
-                                            errorDetails = "API 配额已用完。\n\n解决方案：\n1. 等待一段时间后重试\n2. 检查 Google AI Studio 的配额限制\n3. 考虑升级到付费计划";
+                                        
+                                        if (notionItem && notionItem.analysis) {
+                                            let analysisData;
+                                            try {
+                                                analysisData = JSON.parse(notionItem.analysis);
+                                            } catch {
+                                                analysisData = {
+                                                    visual_style: notionItem.analysis,
+                                                    motion_analysis: notionItem.analysis,
+                                                    script_structure: []
+                                                };
+                                            }
+                                            
+                                            setAnalysis({
+                                                visual: { 
+                                                    style: analysisData.visual_style || notionItem.analysis || "暂无分析内容", 
+                                                    status: 'done'
+                                                },
+                                                motion: { 
+                                                    analysis: analysisData.motion_analysis || notionItem.analysis || "暂无分析内容", 
+                                                    status: 'done' 
+                                                },
+                                                script: { 
+                                                    structure: analysisData.script_structure || [], 
+                                                    status: 'done' 
+                                                },
+                                                status: 'success',
+                                                notes: "已从 Notion 重新加载"
+                                            });
                                         } else {
-                                            errorDetails = errorMsg;
+                                            setAnalysis((prev:any) => ({ 
+                                                ...prev, 
+                                                status: 'error', 
+                                                notes: "Notion 中暂无此视频的分析内容",
+                                                errorDetails: "请在 Notion 数据库中补充该视频的分析内容"
+                                            }));
                                         }
+                                    } else {
                                         setAnalysis((prev:any) => ({ 
                                             ...prev, 
                                             status: 'error', 
-                                            notes: "重试失败",
-                                            errorDetails: errorDetails
+                                            notes: "无法从 Notion 加载数据",
+                                            errorDetails: result.message || "未知错误"
                                         }));
                                     }
                                 } catch (e: any) {
@@ -606,101 +814,74 @@ export default function VideoDetail() {
                 </div>
             )}
             
-             {activeTab === 'visual' && (
-                <>
-                    <AnalysisSection title="AI VISUAL STYLE" loading={analysis.status === 'loading'}>
-                        <div className={`bg-gray-900/50 p-4 rounded-lg border border-gray-800 text-sm text-gray-400 italic leading-relaxed ${analysis.status === 'loading'?'animate-pulse':''}`}>
-                            "{analysis.visual.style}"
+            {/* 合并所有分析内容到一个区域 */}
+            <>
+                {/* 主要分析内容 */}
+                <AnalysisSection title="分析内容" loading={analysis.status === 'loading'}>
+                    <div className={`bg-gray-900/50 p-4 rounded-lg border border-gray-800 text-sm text-gray-300 leading-relaxed whitespace-pre-line ${analysis.status === 'loading'?'animate-pulse':''}`}>
+                        {analysis.visual.style || analysis.motion.analysis || "暂无分析内容"}
+                    </div>
+                </AnalysisSection>
+                
+                {/* 配色方案 - 从视频封面真实提取 */}
+                <AnalysisSection title="COLOR PALETTE">
+                    {/* 隐藏的图片用于提取颜色 */}
+                    {coverImageUrl && displayColors.length === 0 && (
+                        <div className="absolute inset-0 pointer-events-none opacity-0 w-1 h-1 overflow-hidden">
+                            <Palette
+                                src={`${coverImageUrl}?t=${new Date().getTime()}`}
+                                colorCount={4}
+                                format="hex"
+                                crossOrigin="anonymous"
+                            >
+                                {({ data, loading }) => {
+                                    if (!loading && data && Array.isArray(data) && data.length > 0 && !colorsExtracting) {
+                                        setColorsExtracting(true);
+                                        setTimeout(() => {
+                                            setExtractedColors(data.slice(0, 4));
+                                            setColorsExtracting(false);
+                                        }, 100);
+                                    }
+                                    return null;
+                                }}
+                            </Palette>
                         </div>
-                    </AnalysisSection>
+                    )}
                     
-                    {/* 配色方案 - 从视频封面真实提取 */}
-                    <AnalysisSection title="COLOR PALETTE">
-                        {/* 隐藏的图片用于提取颜色 */}
-                        {coverImageUrl && displayColors.length === 0 && (
-                            <div className="absolute inset-0 pointer-events-none opacity-0 w-1 h-1 overflow-hidden">
-                                <Palette
-                                    src={`${coverImageUrl}?t=${new Date().getTime()}`}
-                                    colorCount={4}
-                                    format="hex"
-                                    crossOrigin="anonymous"
+                    {displayColors.length > 0 ? (
+                        <div className="flex gap-2">
+                            {displayColors.slice(0, 4).map((color: string, index: number) => (
+                                <div
+                                    key={index}
+                                    className="flex-1 h-16 rounded-lg border border-white/10 overflow-hidden group cursor-pointer hover:scale-105 transition-transform"
+                                    style={{ backgroundColor: color }}
+                                    title={color}
                                 >
-                                    {({ data, loading }) => {
-                                        if (!loading && data && Array.isArray(data) && data.length > 0 && !colorsExtracting) {
-                                            setColorsExtracting(true);
-                                            setTimeout(() => {
-                                                setExtractedColors(data.slice(0, 4));
-                                                setColorsExtracting(false);
-                                            }, 100);
-                                        }
-                                        return null;
-                                    }}
-                                </Palette>
-                            </div>
-                        )}
-                        
-                        {displayColors.length > 0 ? (
-                            <div className="flex gap-2">
-                                {displayColors.slice(0, 4).map((color: string, index: number) => (
-                                    <div
-                                        key={index}
-                                        className="flex-1 h-16 rounded-lg border border-white/10 overflow-hidden group cursor-pointer hover:scale-105 transition-transform"
-                                        style={{ backgroundColor: color }}
-                                        title={color}
-                                    >
-                                        <div className="h-full w-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
-                                            <span className="text-xs font-mono text-white drop-shadow-lg">{color}</span>
-                                        </div>
+                                    <div className="h-full w-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                                        <span className="text-xs font-mono text-white drop-shadow-lg">{color}</span>
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="flex gap-2">
-                                {[0, 1, 2, 3].map((i) => (
-                                    <div key={i} className="flex-1 h-16 rounded-lg border border-white/10 bg-slate-800/50 flex items-center justify-center">
-                                        <Loader2 size={16} className="animate-spin text-slate-500" />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </AnalysisSection>
-                    
-                    <AnalysisSection title="TAGS">
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            {tags.map((tag: string, index: number) => (
-                                <span key={index} className="px-2.5 py-1 bg-gray-900 text-gray-300 text-xs rounded border border-gray-800 hover:border-gray-600 cursor-pointer transition">#{tag}</span>
-                            ))}
-                         </div>
-                    </AnalysisSection>
-                </>
-            )}
-
-            {activeTab === 'motion' && (
-                 <AnalysisSection title="AI MOTION ANALYSIS" loading={analysis.status === 'loading'}>
-                    <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg flex gap-3 items-start">
-                        <Activity className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                        <p className="text-xs text-blue-300 leading-relaxed">{analysis.motion.analysis}</p>
-                    </div>
-                </AnalysisSection>
-            )}
-
-            {activeTab === 'script' && (
-                <AnalysisSection title="AI SCRIPT STRUCTURE" loading={analysis.status === 'loading'}>
-                     <div className="space-y-4">
-                        {analysis.script.structure && analysis.script.structure.length > 0 ? analysis.script.structure.map((item: any, i: number) => (
-                            <div key={i} className="flex items-start gap-4">
-                                <div className="w-16 text-xs font-mono text-blue-400 text-right mt-1 shrink-0">{item.time}</div>
-                                <div className="flex-1 bg-gray-900/50 p-3 rounded border border-gray-800">
-                                    <h5 className="text-xs font-bold text-gray-200 mb-1">{item.label}</h5>
-                                    <p className="text-xs text-gray-400 leading-relaxed">{item.summary}</p>
                                 </div>
-                            </div>
-                        )) : (
-                            <div className="text-xs text-gray-500 text-center py-4">AI 分析中...</div>
-                        )}
-                    </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            {[0, 1, 2, 3].map((i) => (
+                                <div key={i} className="flex-1 h-16 rounded-lg border border-white/10 bg-slate-800/50 flex items-center justify-center">
+                                    <Loader2 size={16} className="animate-spin text-slate-500" />
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </AnalysisSection>
-            )}
+                
+                <AnalysisSection title="TAGS">
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        {tags.map((tag: string, index: number) => (
+                            <span key={index} className="px-2.5 py-1 bg-gray-900 text-gray-300 text-xs rounded border border-gray-800 hover:border-gray-600 cursor-pointer transition">#{tag}</span>
+                        ))}
+                     </div>
+                </AnalysisSection>
+            </>
           </div>
         </div>
       </div>
