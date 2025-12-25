@@ -103,6 +103,22 @@ export default function VideoDetail() {
 
       if (!team) {
         alert('文件夹不存在');
+        setIsSharing(false);
+        return;
+      }
+
+      // 检查用户是否是团队成员且状态为 Active
+      const { data: member } = await supabase
+        .from('team_members')
+        .select('*')
+        .eq('team_id', team.team_id)
+        .eq('user_id', user.id)
+        .eq('status', 'Active')
+        .maybeSingle();
+
+      if (!member) {
+        alert('您不是团队成员或邀请尚未激活，无法分享视频');
+        setIsSharing(false);
         return;
       }
 

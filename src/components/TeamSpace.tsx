@@ -164,7 +164,37 @@ export default function TeamSpace() {
       // 2. 加载成员列表
       await loadMembers(teamInfo.id);
 
-      // 2.5. 检查并确保当前用户是成员（重要：在加载成员后立即检查）
+      // 2.5. 检查是否有待激活的邀请（邮箱匹配）
+      if (currentUser.email) {
+        const { data: pendingInvite } = await supabase
+          .from('team_members')
+          .select('*')
+          .eq('team_id', teamInfo.id)
+          .eq('email', currentUser.email)
+          .eq('status', 'Pending')
+          .maybeSingle();
+
+        if (pendingInvite) {
+          console.log('✅ 发现待激活的邀请，正在自动激活...');
+          const { error: activateError } = await supabase
+            .from('team_members')
+            .update({
+              user_id: currentUser.id,
+              status: 'Active'
+            })
+            .eq('id', pendingInvite.id);
+
+          if (activateError) {
+            console.error('❌ 激活邀请失败:', activateError);
+          } else {
+            console.log('✅ 邀请已自动激活');
+            // 重新加载成员列表
+            await loadMembers(teamInfo.id);
+          }
+        }
+      }
+
+      // 2.6. 检查并确保当前用户是成员（重要：在加载成员后立即检查）
       const { data: currentMemberCheck } = await supabase
         .from('team_members')
         .select('*')
@@ -466,6 +496,17 @@ export default function TeamSpace() {
 
   const handleCreateFolder = async () => {
     if (!team || !currentUser) return;
+
+    // 检查用户是否是团队成员且状态为 Active
+    const currentMember = members.find(m => m.user_id === currentUser.id);
+    if (!currentMember) {
+      alert('您不是团队成员，无法创建文件夹');
+      return;
+    }
+    if (currentMember.status !== 'Active') {
+      alert('您的邀请尚未激活，无法创建文件夹');
+      return;
+    }
 
     const folderName = prompt('请输入文件夹名称:');
     if (!folderName?.trim()) return;
