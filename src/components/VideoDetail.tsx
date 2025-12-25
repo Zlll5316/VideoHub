@@ -459,11 +459,28 @@ export default function VideoDetail() {
         } catch (e: any) {
             console.error("❌ 从 Notion 加载失败:", e);
             
+            // 判断错误类型
+            const isNetworkError = e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError') || e.message?.includes('timeout');
+            const isServerError = e.message?.includes('HTTP 5') || e.message?.includes('HTTP 4');
+            
+            let errorMessage = "无法从 Notion 加载分析数据";
+            let errorDetails = `错误: ${e.message || e.toString()}`;
+            
+            if (isNetworkError) {
+                errorMessage = "网络连接失败";
+                errorDetails = "无法连接到 Notion API 服务。\n\n可能原因：\n1. 网络连接问题\n2. Notion API 服务暂时不可用\n3. 请稍后重试";
+            } else if (isServerError) {
+                errorMessage = "Notion API 服务错误";
+                errorDetails = "Notion API 返回了错误响应。\n\n可能原因：\n1. Notion API Token 配置错误\n2. Notion 数据库权限问题\n3. 请检查后端配置";
+            } else {
+                errorDetails = `错误: ${e.message || e.toString()}\n\n请确保：\n1. Notion API 配置正确\n2. 该视频在 Notion 数据库中存在\n3. 网络连接正常`;
+            }
+            
             setAnalysis((prev:any) => ({ 
                 ...prev, 
                 status: 'error', 
-                notes: "无法从 Notion 加载分析数据",
-                errorDetails: `错误: ${e.message || e.toString()}\n\n请确保：\n1. 后端服务正在运行\n2. Notion API 配置正确\n3. 该视频在 Notion 数据库中存在`
+                notes: errorMessage,
+                errorDetails: errorDetails
             }));
         }
     };
@@ -672,37 +689,18 @@ export default function VideoDetail() {
                     <div className="flex gap-2 mt-3">
                         <button 
                             onClick={async () => {
-                                // 先检查健康状态
                                 setAnalysis((prev:any) => ({ 
                                     ...prev, 
                                     status: 'loading', 
-                                    notes: "正在检查后端状态..." 
+                                    notes: "正在从 Notion 重新加载..." 
                                 }));
                                 
                                 try {
-                                    const healthResponse = await fetch(`${API_URL}/health`, {
-                                        method: 'GET',
-                                        signal: AbortSignal.timeout(5000)
-                                    });
-                                    
-                                    if (!healthResponse.ok) {
-                                        throw new Error('后端未运行');
-                                    }
-                                    
-                                    const healthData = await healthResponse.json();
-                                    console.log('✅ 后端健康检查通过:', healthData);
-                                    
-                                    // 健康检查通过，开始分析
-                                    setAnalysis((prev:any) => ({ 
-                                        ...prev, 
-                                        status: 'loading', 
-                                        notes: "正在重新分析..." 
-                                    }));
-                                    
                                     // 重新从 Notion 加载
                                     const response = await fetch(`${API_URL}/fetch_video_list`, {
                                       method: 'GET',
-                                      headers: { 'Content-Type': 'application/json' }
+                                      headers: { 'Content-Type': 'application/json' },
+                                      signal: AbortSignal.timeout(30000)
                                     });
                                     
                                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -764,56 +762,20 @@ export default function VideoDetail() {
                                         }));
                                     }
                                 } catch (e: any) {
+                                    const isNetworkError = e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError') || e.message?.includes('timeout');
                                     setAnalysis((prev:any) => ({ 
                                         ...prev, 
                                         status: 'error', 
-                                        notes: `重试失败: ${e.message || e.toString()}`,
-                                        errorDetails: "请确保后端服务正在运行"
+                                        notes: isNetworkError ? "网络连接失败" : `重试失败: ${e.message || e.toString()}`,
+                                        errorDetails: isNetworkError 
+                                            ? "无法连接到 Notion API 服务，请检查网络连接" 
+                                            : `错误: ${e.message || e.toString()}`
                                     }));
                                 }
                             }}
-                            className="flex-1 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-red-300 text-xs font-medium transition"
+                            className="flex-1 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-purple-300 text-xs font-medium transition"
                         >
-                            🔄 重新分析
-                        </button>
-                        <button 
-                            onClick={async () => {
-                                setAnalysis((prev:any) => ({ 
-                                    ...prev, 
-                                    status: 'loading', 
-                                    notes: "正在检查后端状态..." 
-                                }));
-                                
-                                try {
-                                    const response = await fetch(`${API_URL}/health`, {
-                                        method: 'GET',
-                                        signal: AbortSignal.timeout(5000)
-                                    });
-                                    
-                                    if (response.ok) {
-                                        const data = await response.json();
-                                        alert(`✅ 后端运行正常！\n\n状态: ${data.status}\n消息: ${data.message}\n代理: ${data.proxy}`);
-                                        setAnalysis((prev:any) => ({ 
-                                            ...prev, 
-                                            status: 'idle',
-                                            notes: "后端检查完成，可以开始分析"
-                                        }));
-                                    } else {
-                                        throw new Error('后端未响应');
-                                    }
-                                } catch (e: any) {
-                                    alert(`❌ 后端未运行！\n\n请执行以下步骤：\n1. 打开终端\n2. 运行: python main.py\n3. 等待看到 "✅ Google 连接测试通过"\n4. 刷新页面`);
-                                    setAnalysis((prev:any) => ({ 
-                                        ...prev, 
-                                        status: 'error',
-                                        notes: "后端未运行",
-                                        errorDetails: "请运行 python main.py 启动后端服务"
-                                    }));
-                                }
-                            }}
-                            className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-blue-300 text-xs font-medium transition"
-                        >
-                            🔍 检查后端
+                            🔄 重新加载
                         </button>
                     </div>
                 </div>
