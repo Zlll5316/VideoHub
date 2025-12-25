@@ -256,28 +256,37 @@ export default function VideoDetail() {
 
   // 加载视频数据（优先从 Notion，然后从本地）
   useEffect(() => {
-    const loadVideoData = async () => {
+    const loadVideoData = async (useFallback = false) => {
       setLoading(true);
       try {
         console.log('🔍 VideoDetail: 开始加载视频数据，ID:', id);
+        console.log('🔍 VideoDetail: 使用回退模式:', useFallback);
         
         // 1. 优先从 Notion 加载
         try {
-          const response = await fetch(getApiUrl('fetch_video_list'), {
+          const apiUrl = getApiUrl('fetch_video_list', useFallback);
+          console.log('📡 VideoDetail: API URL:', apiUrl);
+          
+          const response = await fetch(apiUrl, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
             signal: AbortSignal.timeout(60000) // 增加超时时间到60秒
           });
           
+          console.log('📡 VideoDetail: 响应状态:', response.status, response.statusText);
+          
           if (response.ok) {
             const result = await response.json();
+            console.log('📡 VideoDetail: 收到数据，状态:', result.status, '数据长度:', result.data?.length || 0);
+            
             if (result.status === 'success' && result.data) {
               // 查找匹配的视频（通过 ID 或 URL）
               console.log(`🔍 VideoDetail: 在 ${result.data.length} 个视频中查找 ID: ${id}`);
               
               const notionVideo = result.data.find((item: any) => {
-                // 匹配 Notion ID
+                // 匹配 Notion ID（精确匹配）
                 if (item.id === id) {
+                  console.log('✅ VideoDetail: 通过 Notion ID 匹配成功');
                   return true;
                 }
                 // 匹配从 URL 提取的 YouTube ID
@@ -285,23 +294,30 @@ export default function VideoDetail() {
                   if (item.url.includes('youtube.com/watch?v=')) {
                     const videoId = item.url.split('v=')[1]?.split('&')[0];
                     if (videoId === id) {
+                      console.log('✅ VideoDetail: 通过 YouTube ID 匹配成功');
                       return true;
                     }
                   } else if (item.url.includes('youtu.be/')) {
                     const videoId = item.url.split('youtu.be/')[1]?.split('?')[0];
                     if (videoId === id) {
+                      console.log('✅ VideoDetail: 通过 YouTube 短链接 ID 匹配成功');
                       return true;
                     }
                   }
                   // 如果 URL 包含 ID（部分匹配）
                   if (item.url.includes(id)) {
+                    console.log('✅ VideoDetail: 通过 URL 部分匹配成功');
                     return true;
                   }
                 }
                 return false;
               });
               
+              console.log('🔍 VideoDetail: 查找结果:', notionVideo ? '找到视频' : '未找到视频');
+              
               if (notionVideo) {
+                console.log('✅ VideoDetail: 找到视频，标题:', notionVideo.title);
+                
                 // 转换为 Video 格式
                 let videoId = notionVideo.id;
                 if (notionVideo.url && notionVideo.url.includes('youtube.com/watch?v=')) {
@@ -320,20 +336,34 @@ export default function VideoDetail() {
                   coverImage: notionVideo.cover,
                   tags: notionVideo.tags || [],
                   analysis: notionVideo.analysis || '',
-                  sourceUrl: notionVideo.url
+                  sourceUrl: notionVideo.url,
+                  // 保留原始 Notion ID，用于后续匹配
+                  notionId: notionVideo.id
                 };
                 
                 setVideo(videoData);
                 setLoading(false);
                 return;
+              } else {
+                console.warn('⚠️ VideoDetail: 在 Notion 数据中未找到匹配的视频，ID:', id);
+                console.log('📋 VideoDetail: 可用的视频 ID 列表:', result.data.map((item: any) => item.id).slice(0, 5));
               }
             }
           }
-        } catch (notionError) {
-          console.warn('⚠️ VideoDetail: 从 Notion 加载失败，尝试本地数据:', notionError);
+        } catch (notionError: any) {
+          console.warn('⚠️ VideoDetail: 从 Notion 加载失败:', notionError);
+          
+          // 如果是本地开发环境且本地后端连接失败，自动回退到 Vercel 生产 API
+          if (!useFallback && 
+              (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+              (notionError.message?.includes('Failed to fetch') || notionError.message?.includes('NetworkError') || notionError.name === 'TypeError')) {
+            console.log('🔄 VideoDetail: 本地后端连接失败，自动回退到 Vercel 生产 API...');
+            // 递归调用，使用回退模式
+            return loadVideoData(true);
+          }
         }
         
-        // 2. 回退到本地数据
+        // 2. 回退到本地数据（只有在 Notion API 完全失败且不是网络错误时）
         let allTasks: any[] = [];
         const localStoreData = localStorage.getItem('tasks');
         if (localStoreData) { 
@@ -358,8 +388,16 @@ export default function VideoDetail() {
         } else {
           console.warn('❌ VideoDetail: 未找到视频，ID:', id);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ VideoDetail: 加载视频数据失败:', error);
+        
+        // 如果是本地开发环境且是网络错误，尝试回退到 Vercel 生产 API
+        if (!useFallback && 
+            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+            (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError') || error.name === 'TypeError')) {
+          console.log('🔄 VideoDetail: 网络错误，自动回退到 Vercel 生产 API...');
+          return loadVideoData(true);
+        }
       } finally {
         setLoading(false);
       }
