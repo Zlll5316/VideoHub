@@ -66,11 +66,29 @@ export default async function handler(
 
     const notionData = await notionResponse.json();
 
-    // 解析 Notion 数据（复用 main.py 的逻辑）
+    // 辅助函数：从 YouTube URL 生成缩略图
+    const getYoutubeThumbnail = (url: string): string => {
+      try {
+        let videoId = '';
+        if (url.includes('youtu.be/')) {
+          videoId = url.split('/').pop()?.split('?')[0] || '';
+        } else if (url.includes('v=')) {
+          videoId = url.split('v=')[1]?.split('&')[0] || '';
+        }
+        if (videoId) {
+          return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+        }
+      } catch (e) {
+        console.error('生成 YouTube 缩略图失败:', e);
+      }
+      return '';
+    };
+
+    // 解析 Notion 数据（完全复用 main.py 的逻辑）
     const videos = notionData.results?.map((page: any) => {
       const props = page.properties || {};
       
-      // 辅助函数：解析属性值
+      // 辅助函数：解析属性值（完全匹配 main.py 的逻辑）
       const getPropValues = (propData: any): string[] => {
         if (!propData) return [];
         const pType = propData.type;
@@ -82,44 +100,90 @@ export default async function handler(
           return propData.select ? [propData.select.name] : [];
         }
         if (pType === 'rich_text') {
-          return propData.rich_text?.map((item: any) => item.plain_text).filter(Boolean) || [];
+          // 对于公司/产品，如果用逗号分隔，这里负责拆分（匹配 main.py）
+          const textList = propData.rich_text || [];
+          if (textList.length > 0) {
+            const rawText = textList.map((t: any) => t.plain_text || '').join('');
+            if (rawText.includes(',')) {
+              return rawText.split(',').map((t: string) => t.trim()).filter(Boolean);
+            }
+            return rawText ? [rawText] : [];
+          }
+          return [];
         }
         if (pType === 'title') {
-          return propData.title?.map((item: any) => item.plain_text).filter(Boolean) || [];
+          const textList = propData.title || [];
+          return textList.length > 0 ? [textList[0].plain_text] : [];
         }
         return [];
       };
 
-      // 提取 URL
-      let url = '';
-      if (props.URL?.type === 'url' && props.URL.url) {
-        url = props.URL.url;
-      } else if (props.URL?.type === 'rich_text') {
-        url = getPropValues(props.URL)[0] || '';
-      }
-
-      // 提取分析内容
+      // 1. 标题（匹配 main.py：使用 "名称"）
+      const titleVals = getPropValues(props['名称'] || {});
+      const title = titleVals[0] || '无标题';
+      
+      // 2. URL（匹配 main.py）
+      const urlProp = props['URL'] || {};
+      const videoUrl = urlProp.url || '';
+      
+      // 3. 视频分析（匹配 main.py：使用 "视频分析"，强行拼接所有碎片）
       let analysis = '';
-      if (props.分析?.type === 'rich_text') {
-        analysis = getPropValues(props.分析).join(' ') || '';
+      const analysisCol = props['视频分析'] || {};
+      if (analysisCol.rich_text && Array.isArray(analysisCol.rich_text)) {
+        analysis = analysisCol.rich_text.map((t: any) => t.plain_text || '').join('');
+      }
+      if (!analysis) {
+        analysis = '暂无分析内容';
       }
 
-      // 提取封面
-      let cover = '';
-      if (props.封面?.type === 'files' && props.封面.files?.[0]) {
-        cover = props.封面.files[0].file?.url || props.封面.files[0].external?.url || '';
+      // 4. 封面（匹配 main.py：先检查 page.cover，再检查 props.封面，最后从 YouTube URL 生成）
+      let coverImg = '';
+      const coverData = page.cover;
+      if (coverData) {
+        if (coverData.type === 'external') {
+          coverImg = coverData.external?.url || '';
+        } else if (coverData.type === 'file') {
+          coverImg = coverData.file?.url || '';
+        }
       }
+      // 如果页面封面不存在，检查属性中的封面
+      if (!coverImg) {
+        const coverProp = props['封面'] || {};
+        if (coverProp.type === 'files' && coverProp.files?.[0]) {
+          coverImg = coverProp.files[0].file?.url || coverProp.files[0].external?.url || '';
+        }
+      }
+      // 如果还是没有，从 YouTube URL 生成
+      if (!coverImg && videoUrl) {
+        coverImg = getYoutubeThumbnail(videoUrl);
+      }
+      // 最后兜底
+      if (!coverImg) {
+        coverImg = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop';
+      }
+
+      // 5. 公司/品牌（匹配 main.py：使用 "公司/产品"）
+      const company = getPropValues(props['公司/产品'] || props['公司'] || {});
+      
+      // 6. 动画类型（匹配 main.py：使用 "动画类型"）
+      const animationType = getPropValues(props['动画类型'] || {});
+      
+      // 7. 表现手法（匹配 main.py：使用 "表现手法"）
+      const technique = getPropValues(props['表现手法'] || {});
+      
+      // 8. 典型特征（匹配 main.py：使用 "典型特征"）
+      const features = getPropValues(props['典型特征'] || {});
 
       return {
         id: page.id,
-        title: getPropValues(props.标题 || props.名称 || props.Name || props.Title)[0] || '无标题',
-        url: url,
-        cover: cover,
+        title: title,
+        url: videoUrl,
+        cover: coverImg,
         analysis: analysis,
-        company: getPropValues(props.公司 || props.品牌 || props.Company || props.Brand),
-        animationType: getPropValues(props.动画类型 || props.AnimationType || props.Type),
-        technique: getPropValues(props.表现手法 || props.Technique || props.Style),
-        features: getPropValues(props.典型特征 || props.Features || props.Tags),
+        company: company,
+        animationType: animationType,
+        technique: technique,
+        features: features,
       };
     }) || [];
 
