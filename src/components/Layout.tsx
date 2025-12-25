@@ -46,7 +46,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-slate-950 overflow-hidden transition-colors duration-300">
+    <div className="flex h-screen bg-[#0a0a0a] overflow-hidden" style={{ backgroundColor: '#0a0a0a' }}>
       <Sidebar activeMenu={activeMenu} onMenuChange={handleMenuChange} />
       <Outlet />
     </div>
