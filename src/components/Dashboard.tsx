@@ -9,26 +9,32 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [quickCollectUrl, setQuickCollectUrl] = useState('');
   
-  // 检测环境：生产环境使用 Vercel API 代理，开发环境使用本地后端
-  const getApiUrl = () => {
+  // 检测环境：生产环境使用 Vercel API 代理，开发环境优先使用本地后端，失败时回退到 Vercel 生产 API
+  const getApiUrl = (useFallback = false) => {
     if (import.meta.env.VITE_API_URL) {
       return `${import.meta.env.VITE_API_URL}/fetch_video_list`;
     }
-    // 生产环境使用 Vercel API 代理
-    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    // 生产环境使用相对路径（Vercel serverless function）
+    if (!useFallback && typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
       return '/api/notion';
     }
-    // 开发环境使用本地后端
-    return 'http://localhost:8000/fetch_video_list';
+    // 开发环境：优先使用本地后端，失败时回退到 Vercel 生产 API
+    if (!useFallback) {
+      return 'http://localhost:8000/fetch_video_list';
+    }
+    // 回退模式：使用 Vercel 生产环境的完整 URL
+    return 'https://video-hub-swart.vercel.app/api/notion';
   };
 
-  // 从 Notion 加载数据
+  // 从 Notion 加载数据（支持自动回退到 Vercel 生产 API）
   useEffect(() => {
-    const loadFromNotion = async () => {
+    const loadFromNotion = async (useFallback = false) => {
       setIsLoading(true);
       try {
         console.log('🔄 开始从 Notion 加载数据...');
-        const response = await fetch(getApiUrl(), {
+        const apiUrl = getApiUrl(useFallback);
+        console.log('📡 Dashboard: API URL:', apiUrl);
+        const response = await fetch(apiUrl, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           signal: AbortSignal.timeout(60000)
@@ -115,6 +121,16 @@ export default function Dashboard() {
         }
       } catch (error: any) {
         console.error('❌ Dashboard: 从 Notion 加载失败:', error);
+        
+        // 如果是本地开发环境且本地后端连接失败，自动回退到 Vercel 生产 API
+        if (!useFallback && 
+            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+            (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError'))) {
+          console.log('🔄 Dashboard: 本地后端连接失败，自动回退到 Vercel 生产 API...');
+          // 递归调用，使用回退模式
+          return loadFromNotion(true);
+        }
+        
         setVideos([]);
       } finally {
         setIsLoading(false);

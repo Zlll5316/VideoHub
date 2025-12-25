@@ -35,17 +35,21 @@ export default function Library() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // 检测环境：生产环境使用 Vercel API 代理，开发环境优先使用本地后端，失败时回退到 Vercel API
+  // 检测环境：生产环境使用 Vercel API 代理，开发环境优先使用本地后端，失败时回退到 Vercel 生产 API
   const getApiUrl = (useFallback = false) => {
     if (import.meta.env.VITE_API_URL) {
       return import.meta.env.VITE_API_URL;
     }
-    // 生产环境或使用回退时，使用 Vercel API 代理
-    if (useFallback || (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')) {
+    // 生产环境使用相对路径（Vercel serverless function）
+    if (!useFallback && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
       return '/api/notion';
     }
-    // 开发环境优先使用本地后端
-    return 'http://localhost:8000/fetch_video_list';
+    // 开发环境：优先使用本地后端，失败时回退到 Vercel 生产 API
+    if (!useFallback) {
+      return 'http://localhost:8000/fetch_video_list';
+    }
+    // 回退模式：使用 Vercel 生产环境的完整 URL
+    return 'https://video-hub-swart.vercel.app/api/notion';
   };
 
   // 1. 加载数据（支持自动回退到 Vercel API）

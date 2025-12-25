@@ -12,16 +12,20 @@ export default function VideoDetail() {
   const [loading, setLoading] = useState(true);
   
   // 检测环境：生产环境使用 Vercel API 代理，开发环境使用本地后端
-  const getApiUrl = (endpoint: string = 'fetch_video_list') => {
+  const getApiUrl = (endpoint: string = 'fetch_video_list', useFallback = false) => {
     if (import.meta.env.VITE_API_URL) {
       return `${import.meta.env.VITE_API_URL}/${endpoint}`;
     }
-    // 生产环境使用 Vercel API 代理
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    // 生产环境使用相对路径（Vercel serverless function）
+    if (!useFallback && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
       return '/api/notion';
     }
-    // 开发环境使用本地后端
-    return `http://localhost:8000/${endpoint}`;
+    // 开发环境：优先使用本地后端，失败时回退到 Vercel 生产 API
+    if (!useFallback) {
+      return `http://localhost:8000/${endpoint}`;
+    }
+    // 回退模式：使用 Vercel 生产环境的完整 URL
+    return 'https://video-hub-swart.vercel.app/api/notion';
   };
   
   const [analysis, setAnalysis] = useState<any>({
