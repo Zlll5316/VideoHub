@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, ExternalLink, Play, Briefcase, Film, Layers, Zap } from 'lucide-react';
+import { RefreshCw, ExternalLink, Play, Briefcase, Film, Layers, Zap, Search, X } from 'lucide-react';
 
 // 定义我们新的数据结构
 interface NotionVideo {
@@ -26,6 +26,9 @@ export default function Library() {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedTechnique, setSelectedTechnique] = useState<string>('all');
   const [selectedFeature, setSelectedFeature] = useState<string>('all');
+  
+  // 搜索状态
+  const [searchQuery, setSearchQuery] = useState<string>('');
   
   const [videos, setVideos] = useState<NotionVideo[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -80,16 +83,32 @@ export default function Library() {
   const techniqueOptions = useMemo(() => getOptions('technique'), [videos]);
   const featureOptions = useMemo(() => getOptions('features'), [videos]);
 
-  // 3. 多重筛选逻辑 (AND关系)
+  // 3. 多重筛选逻辑 (AND关系) + 搜索
   const filteredVideos = useMemo(() => {
     return videos.filter(v => {
+      // 筛选器匹配
       const matchCompany = selectedCompany === 'all' || v.company.includes(selectedCompany);
       const matchType = selectedType === 'all' || v.animationType.includes(selectedType);
       const matchTech = selectedTechnique === 'all' || v.technique.includes(selectedTechnique);
       const matchFeature = selectedFeature === 'all' || v.features.includes(selectedFeature);
-      return matchCompany && matchType && matchTech && matchFeature;
+      
+      // 搜索匹配（如果搜索框有内容）
+      let matchSearch = true;
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        const titleMatch = v.title.toLowerCase().includes(query);
+        const companyMatch = v.company.some(c => c.toLowerCase().includes(query));
+        const typeMatch = v.animationType.some(t => t.toLowerCase().includes(query));
+        const techniqueMatch = v.technique.some(t => t.toLowerCase().includes(query));
+        const featureMatch = v.features.some(f => f.toLowerCase().includes(query));
+        const analysisMatch = v.analysis?.toLowerCase().includes(query) || false;
+        
+        matchSearch = titleMatch || companyMatch || typeMatch || techniqueMatch || featureMatch || analysisMatch;
+      }
+      
+      return matchCompany && matchType && matchTech && matchFeature && matchSearch;
     });
-  }, [videos, selectedCompany, selectedType, selectedTechnique, selectedFeature]);
+  }, [videos, selectedCompany, selectedType, selectedTechnique, selectedFeature, searchQuery]);
 
   const handleUpdateVideos = () => {
     setIsUpdating(true);
@@ -143,6 +162,33 @@ export default function Library() {
             <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
             <span>{isUpdating ? '更新中...' : '刷新数据'}</span>
           </button>
+        </div>
+
+        {/* 搜索框 */}
+        <div className="mb-6">
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-purple-400 transition-colors" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索品牌、视频标题或标签..."
+              className="w-full pl-12 pr-12 py-3 bg-[#1e1e1e] border border-[#333] rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <p className="mt-2 text-xs text-slate-500">
+              找到 <span className="text-purple-400 font-medium">{filteredVideos.length}</span> 个匹配的视频
+            </p>
+          )}
         </div>
 
         {/* 4行筛选器区域 */}
