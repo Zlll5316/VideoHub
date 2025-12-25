@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Link as LinkIcon, ArrowRight, Heart, FolderOpen, TrendingUp, BarChart3, Clock, Sparkles, Upload, Archive, Zap } from 'lucide-react';
+import { Plus, Link as LinkIcon, ArrowRight, Heart, Clock, Sparkles, Upload, Archive } from 'lucide-react';
 import { Video } from '../types';
 
 export default function Dashboard() {
@@ -124,35 +124,6 @@ export default function Dashboard() {
     loadFromNotion();
   }, []);
 
-  // 统计数据
-  const stats = useMemo(() => {
-    const totalVideos = videos.length;
-    
-    // SaaS 类视频
-    const saasVideos = videos.filter(v => 
-      v.category === 'saas' || 
-      v.title.toLowerCase().includes('saas') ||
-      v.tags.some(tag => tag.toLowerCase().includes('saas'))
-    ).length;
-    
-    // 本周新增
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    const addedThisWeek = videos.filter(v => {
-      const created = v.createdAt?.getTime() || 0;
-      return created >= oneWeekAgo.getTime();
-    }).length;
-    
-    // 已分析数量
-    const analyzed = videos.filter(v => v.analysis?.scriptNotes && v.analysis.scriptNotes !== '').length;
-    
-    return {
-      totalVideos,
-      saasVideos,
-      addedThisWeek,
-      analyzed
-    };
-  }, [videos]);
 
   // 最近活动（6-8条）
   const recentActivity = useMemo(() => {
@@ -282,77 +253,6 @@ export default function Dashboard() {
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-
-          {/* 第二行：核心数据区 (4个小卡片，每个 Col-span-3) */}
-          <div className="col-span-12 grid grid-cols-12 gap-6">
-            {/* 卡片 1: 总资产 */}
-            <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gray-900/60 backdrop-blur border border-white/5 rounded-xl p-6 hover:border-purple-500/30 hover:bg-gray-800/80 transition-all relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 opacity-10 group-hover:opacity-20 transition-opacity">
-                <FolderOpen className="w-full h-full text-purple-400" />
-              </div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-purple-500/20 rounded-lg">
-                    <FolderOpen className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">总资产</div>
-                </div>
-                <div className="text-4xl font-bold text-white mb-1">{stats.totalVideos}</div>
-                <div className="text-xs text-gray-500">个视频在库中</div>
-              </div>
-            </div>
-
-            {/* 卡片 2: SaaS 类 */}
-            <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gray-900/60 backdrop-blur border border-white/5 rounded-xl p-6 hover:border-purple-500/30 hover:bg-gray-800/80 transition-all relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 opacity-10 group-hover:opacity-20 transition-opacity">
-                <BarChart3 className="w-full h-full text-blue-400" />
-              </div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-blue-500/20 rounded-lg">
-                    <BarChart3 className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">SaaS 类别</div>
-                </div>
-                <div className="text-4xl font-bold text-white mb-1">{stats.saasVideos}</div>
-                <div className="text-xs text-gray-500">个 SaaS 视频</div>
-              </div>
-            </div>
-
-            {/* 卡片 3: 本周新增 */}
-            <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gray-900/60 backdrop-blur border border-white/5 rounded-xl p-6 hover:border-purple-500/30 hover:bg-gray-800/80 transition-all relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 opacity-10 group-hover:opacity-20 transition-opacity">
-                <TrendingUp className="w-full h-full text-green-400" />
-              </div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-green-500/20 rounded-lg">
-                    <TrendingUp className="w-5 h-5 text-green-400" />
-                  </div>
-                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">本周新增</div>
-                </div>
-                <div className="text-4xl font-bold text-white mb-1">+{stats.addedThisWeek}</div>
-                <div className="text-xs text-gray-500">个新增</div>
-              </div>
-            </div>
-
-            {/* 卡片 4: 已分析 */}
-            <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gray-900/60 backdrop-blur border border-white/5 rounded-xl p-6 hover:border-purple-500/30 hover:bg-gray-800/80 transition-all relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Zap className="w-full h-full text-yellow-400" />
-              </div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-yellow-500/20 rounded-lg">
-                    <Zap className="w-5 h-5 text-yellow-400" />
-                  </div>
-                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">已分析</div>
-                </div>
-                <div className="text-4xl font-bold text-white mb-1">{stats.analyzed}</div>
-                <div className="text-xs text-gray-500">个已完成</div>
-              </div>
             </div>
           </div>
 
