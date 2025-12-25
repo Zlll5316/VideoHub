@@ -33,6 +33,7 @@ export default function Library() {
   const [videos, setVideos] = useState<NotionVideo[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // 检测环境：生产环境使用 Vercel API 代理，开发环境使用本地后端
   const getApiUrl = () => {
@@ -50,12 +51,34 @@ export default function Library() {
   // 1. 加载数据
   const loadFromNotion = async () => {
     setLoading(true);
+    setError(null);
     try {
       const apiUrl = getApiUrl();
-      const response = await fetch(apiUrl, { signal: AbortSignal.timeout(60000) });
-      const result = await response.json();
+      console.log('📡 Library: 开始加载数据，API URL:', apiUrl);
+      console.log('📡 Library: 当前环境:', window.location.hostname);
       
-      if (result.status === 'success' && result.data) {
+      const response = await fetch(apiUrl, { 
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(60000) 
+      });
+      
+      console.log('📡 Library: 响应状态:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Library: API 响应错误:', response.status, errorText);
+        throw new Error(`API 错误: ${response.status} ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      console.log('📡 Library: 收到数据:', {
+        status: result.status,
+        dataLength: result.data?.length || 0,
+        hasData: !!result.data
+      });
+      
+      if (result.status === 'success' && result.data && Array.isArray(result.data)) {
         const notionVideos: NotionVideo[] = result.data.map((item: any) => ({
           id: item.id,
           title: item.title || '无标题',
@@ -69,13 +92,28 @@ export default function Library() {
           features: item.features || [],
           isLiked: false
         }));
+        console.log('✅ Library: 成功加载', notionVideos.length, '个视频');
         setVideos(notionVideos);
+        setError(null);
       } else {
+        console.warn('⚠️ Library: API 返回的数据格式不正确:', result);
         setVideos([]);
+        setError(result.message || '数据格式错误');
       }
-    } catch (error) {
-      console.error('加载失败:', error);
+    } catch (error: any) {
+      console.error('❌ Library: 加载失败:', error);
       setVideos([]);
+      if (error.name === 'AbortError') {
+        setError('请求超时，请检查网络连接或稍后重试');
+      } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          setError('无法连接到本地后端服务，请确保 Python 后端正在运行 (http://localhost:8000)');
+        } else {
+          setError('无法连接到服务器，请检查网络连接');
+        }
+      } else {
+        setError(error.message || '加载数据失败，请刷新重试');
+      }
     } finally {
       setLoading(false);
     }
@@ -211,39 +249,72 @@ export default function Library() {
           <FilterRow label="典型特征" icon={Zap} options={featureOptions} selected={selectedFeature} onSelect={setSelectedFeature} />
         </div>
 
+        {/* 错误提示 */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-950/90 backdrop-blur-sm border border-red-800 rounded-xl">
+            <div className="flex items-start gap-3">
+              <div className="text-red-400 text-lg">⚠️</div>
+              <div className="flex-1">
+                <h3 className="text-red-200 font-medium mb-1">加载失败</h3>
+                <p className="text-red-300 text-sm">{error}</p>
+                <button
+                  onClick={loadFromNotion}
+                  className="mt-3 px-4 py-2 bg-red-900/50 hover:bg-red-900/70 text-red-200 rounded-lg text-sm transition-colors"
+                >
+                  重试
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 视频列表 */}
         {loading ? (
           <div className="text-center py-20 text-slate-500"><RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 opacity-50"/>读取中...</div>
-        ) : (
-          <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
-            <AnimatePresence mode="popLayout">
-              {filteredVideos.map((video) => (
-                <motion.div key={video.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="break-inside-avoid">
-                  <div onClick={() => navigate(`/video/${video.id}`, { state: { videoData: video } })} className="bg-[#1e1e1e] border border-[#333] rounded-xl overflow-hidden hover:border-[#555] transition-all group cursor-pointer shadow-lg hover:shadow-purple-900/10">
-                    <div className="relative aspect-video bg-black">
-                      <img src={video.coverUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><Play className="text-white fill-white w-10 h-10 opacity-80" /></div>
-                      <a href={video.videoUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white/70 hover:text-white hover:bg-purple-600 transition-colors z-10 opacity-0 group-hover:opacity-100"><ExternalLink className="w-3.5 h-3.5" /></a>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="text-sm font-bold text-white mb-3 hover:text-purple-400 transition-colors line-clamp-2">{video.title}</h3>
-                      {/* 展示标签 (优先展示公司和类型) */}
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {video.company.slice(0,1).map(t => <span key={t} className="text-[10px] bg-blue-900/30 text-blue-300 px-1.5 py-0.5 rounded border border-blue-800/50">{t}</span>)}
-                        {video.animationType.slice(0,1).map(t => <span key={t} className="text-[10px] bg-purple-900/30 text-purple-300 px-1.5 py-0.5 rounded border border-purple-800/50">{t}</span>)}
-                        {video.features.slice(0, 2).map(t => <span key={t} className="text-[10px] bg-[#2a2a2a] text-slate-400 px-1.5 py-0.5 rounded">{t}</span>)}
-                      </div>
-                      {video.analysis ? (
-                        <div className="text-[11px] text-slate-500 bg-[#252525] p-2 rounded border border-[#333] line-clamp-3 leading-relaxed">{video.analysis}</div>
-                      ) : <div className="text-[11px] text-slate-700 italic">暂无分析</div>}
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+        ) : error ? (
+          <div className="text-center py-20 text-slate-500">
+            <p className="mb-4">无法加载视频数据</p>
+            <button
+              onClick={loadFromNotion}
+              className="px-6 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-lg transition-colors"
+            >
+              点击重试
+            </button>
           </div>
+        ) : (
+          <>
+            <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+              <AnimatePresence mode="popLayout">
+                {filteredVideos.map((video) => (
+                  <motion.div key={video.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="break-inside-avoid">
+                    <div onClick={() => navigate(`/video/${video.id}`, { state: { videoData: video } })} className="bg-[#1e1e1e] border border-[#333] rounded-xl overflow-hidden hover:border-[#555] transition-all group cursor-pointer shadow-lg hover:shadow-purple-900/10">
+                      <div className="relative aspect-video bg-black">
+                        <img src={video.coverUrl} alt={video.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><Play className="text-white fill-white w-10 h-10 opacity-80" /></div>
+                        <a href={video.videoUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white/70 hover:text-white hover:bg-purple-600 transition-colors z-10 opacity-0 group-hover:opacity-100"><ExternalLink className="w-3.5 h-3.5" /></a>
+                      </div>
+                      <div className="p-4">
+                        <h3 className="text-sm font-bold text-white mb-3 hover:text-purple-400 transition-colors line-clamp-2">{video.title}</h3>
+                        {/* 展示标签 (优先展示公司和类型) */}
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {video.company.slice(0,1).map(t => <span key={t} className="text-[10px] bg-blue-900/30 text-blue-300 px-1.5 py-0.5 rounded border border-blue-800/50">{t}</span>)}
+                          {video.animationType.slice(0,1).map(t => <span key={t} className="text-[10px] bg-purple-900/30 text-purple-300 px-1.5 py-0.5 rounded border border-purple-800/50">{t}</span>)}
+                          {video.features.slice(0, 2).map(t => <span key={t} className="text-[10px] bg-[#2a2a2a] text-slate-400 px-1.5 py-0.5 rounded">{t}</span>)}
+                        </div>
+                        {video.analysis ? (
+                          <div className="text-[11px] text-slate-500 bg-[#252525] p-2 rounded border border-[#333] line-clamp-3 leading-relaxed">{video.analysis}</div>
+                        ) : <div className="text-[11px] text-slate-700 italic">暂无分析</div>}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+            {filteredVideos.length === 0 && !error && (
+              <div className="text-center py-20 text-slate-500">没有找到匹配的视频</div>
+            )}
+          </>
         )}
-        {!loading && filteredVideos.length === 0 && <div className="text-center py-20 text-slate-500">没有找到匹配的视频</div>}
       </div>
     </div>
   );
