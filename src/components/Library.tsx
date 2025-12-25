@@ -35,27 +35,28 @@ export default function Library() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // 检测环境：生产环境使用 Vercel API 代理，开发环境使用本地后端
-  const getApiUrl = () => {
+  // 检测环境：生产环境使用 Vercel API 代理，开发环境优先使用本地后端，失败时回退到 Vercel API
+  const getApiUrl = (useFallback = false) => {
     if (import.meta.env.VITE_API_URL) {
       return import.meta.env.VITE_API_URL;
     }
-    // 生产环境使用 Vercel API 代理
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    // 生产环境或使用回退时，使用 Vercel API 代理
+    if (useFallback || (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')) {
       return '/api/notion';
     }
-    // 开发环境使用本地后端
+    // 开发环境优先使用本地后端
     return 'http://localhost:8000/fetch_video_list';
   };
 
-  // 1. 加载数据
-  const loadFromNotion = async () => {
+  // 1. 加载数据（支持自动回退到 Vercel API）
+  const loadFromNotion = async (useFallback = false) => {
     setLoading(true);
     setError(null);
     try {
-      const apiUrl = getApiUrl();
+      const apiUrl = getApiUrl(useFallback);
       console.log('📡 Library: 开始加载数据，API URL:', apiUrl);
       console.log('📡 Library: 当前环境:', window.location.hostname);
+      console.log('📡 Library: 使用回退模式:', useFallback);
       
       const response = await fetch(apiUrl, { 
         method: 'GET',
@@ -102,14 +103,24 @@ export default function Library() {
       }
     } catch (error: any) {
       console.error('❌ Library: 加载失败:', error);
+      
+      // 如果是本地开发环境且本地后端连接失败，自动回退到 Vercel API
+      if (!useFallback && 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+          (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError'))) {
+        console.log('🔄 Library: 本地后端连接失败，自动回退到 Vercel API 代理...');
+        // 递归调用，使用回退模式
+        return loadFromNotion(true);
+      }
+      
       setVideos([]);
       if (error.name === 'AbortError') {
         setError('请求超时，请检查网络连接或稍后重试');
       } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-          setError('无法连接到本地后端服务，请确保 Python 后端正在运行 (http://localhost:8000)');
+        if (useFallback) {
+          setError('无法连接到服务器，请检查网络连接或 Vercel 部署状态');
         } else {
-          setError('无法连接到服务器，请检查网络连接');
+          setError('无法连接到本地后端服务，已自动切换到 Vercel API 代理');
         }
       } else {
         setError(error.message || '加载数据失败，请刷新重试');
@@ -162,7 +173,7 @@ export default function Library() {
 
   const handleUpdateVideos = () => {
     setIsUpdating(true);
-    setTimeout(() => { loadFromNotion().then(() => setIsUpdating(false)); }, 500);
+    setTimeout(() => { loadFromNotion(false).then(() => setIsUpdating(false)); }, 500);
   };
 
   // 通用筛选按钮组件
@@ -258,7 +269,7 @@ export default function Library() {
                 <h3 className="text-red-200 font-medium mb-1">加载失败</h3>
                 <p className="text-red-300 text-sm">{error}</p>
                 <button
-                  onClick={loadFromNotion}
+                  onClick={() => loadFromNotion(false)}
                   className="mt-3 px-4 py-2 bg-red-900/50 hover:bg-red-900/70 text-red-200 rounded-lg text-sm transition-colors"
                 >
                   重试
@@ -275,7 +286,7 @@ export default function Library() {
           <div className="text-center py-20 text-slate-500">
             <p className="mb-4">无法加载视频数据</p>
             <button
-              onClick={loadFromNotion}
+              onClick={() => loadFromNotion(false)}
               className="px-6 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-lg transition-colors"
             >
               点击重试
