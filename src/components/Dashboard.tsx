@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Link as LinkIcon, ArrowRight, Heart, Clock, Sparkles, Upload, Archive } from 'lucide-react';
+import { Plus, Link as LinkIcon, ArrowRight, Heart, FolderOpen, TrendingUp, BarChart3, Clock, Sparkles, Upload, Archive, Zap } from 'lucide-react';
 import { Video } from '../types';
 
 export default function Dashboard() {
@@ -291,6 +291,9 @@ export default function Dashboard() {
             <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gray-900/60 backdrop-blur border border-white/5 rounded-xl p-6 hover:border-purple-500/30 hover:bg-gray-800/80 transition-all relative overflow-hidden group">
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-purple-500/20 rounded-lg">
+                    <FolderOpen className="w-5 h-5 text-purple-400" />
+                  </div>
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">总资产</div>
                 </div>
                 <div className="text-4xl font-bold text-white mb-1">{stats.totalVideos}</div>
@@ -302,6 +305,9 @@ export default function Dashboard() {
             <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gray-900/60 backdrop-blur border border-white/5 rounded-xl p-6 hover:border-purple-500/30 hover:bg-gray-800/80 transition-all relative overflow-hidden group">
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-blue-500/20 rounded-lg">
+                    <BarChart3 className="w-5 h-5 text-blue-400" />
+                  </div>
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">SaaS 类别</div>
                 </div>
                 <div className="text-4xl font-bold text-white mb-1">{stats.saasVideos}</div>
@@ -313,6 +319,9 @@ export default function Dashboard() {
             <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gray-900/60 backdrop-blur border border-white/5 rounded-xl p-6 hover:border-purple-500/30 hover:bg-gray-800/80 transition-all relative overflow-hidden group">
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-green-500/20 rounded-lg">
+                    <TrendingUp className="w-5 h-5 text-green-400" />
+                  </div>
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">本周新增</div>
                 </div>
                 <div className="text-4xl font-bold text-white mb-1">+{stats.addedThisWeek}</div>
@@ -324,6 +333,9 @@ export default function Dashboard() {
             <div className="col-span-12 md:col-span-6 lg:col-span-3 bg-gray-900/60 backdrop-blur border border-white/5 rounded-xl p-6 hover:border-purple-500/30 hover:bg-gray-800/80 transition-all relative overflow-hidden group">
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-yellow-500/20 rounded-lg">
+                    <Zap className="w-5 h-5 text-yellow-400" />
+                  </div>
                   <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">已分析</div>
                 </div>
                 <div className="text-4xl font-bold text-white mb-1">{stats.analyzed}</div>
