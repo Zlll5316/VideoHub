@@ -28,6 +28,33 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* 自定义深色滚动条 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0a0a0a;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+  border: 1px solid #1f2937;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* Firefox 滚动条 */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 #0a0a0a;
+}
+
 /* Line clamp utility */
 .line-clamp-2 {
   display: -webkit-box;

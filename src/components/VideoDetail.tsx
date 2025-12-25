@@ -576,20 +576,20 @@ export default function VideoDetail() {
   const AnalysisSection = ({ title, children, loading=false }: any) => (
       <section className="border-b border-gray-800 pb-6 last:border-0 last:pb-0">
           <div className="flex items-center justify-between mb-4">
-              <h4 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">{title}</h4>
-              {loading && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
+              <h4 className="text-xs font-bold text-gray-400 uppercase flex items-center gap-2">{title}</h4>
+              {loading && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
           </div>
           {children}
       </section>
   );
 
   return (
-    <div className={`flex flex-col bg-black text-white font-sans w-full h-[calc(100vh-20px)] overflow-hidden ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
-      <div className="h-14 px-6 border-b border-gray-800 flex justify-between items-center bg-black shrink-0">
+    <div className={`flex flex-col bg-[#0a0a0a] text-white font-sans w-full h-[calc(100vh-20px)] overflow-hidden ${isResizing ? 'cursor-col-resize select-none' : ''}`} style={{ backgroundColor: '#0a0a0a', color: '#ffffff' }}>
+      <div className="h-14 px-6 border-b border-gray-800 flex justify-between items-center bg-[#0a0a0a] shrink-0" style={{ backgroundColor: '#0a0a0a' }}>
         <div className="flex items-center gap-4 flex-1">
             <button onClick={() => navigate(-1)} className="flex items-center text-gray-400 hover:text-white transition"><ArrowLeft className="w-5 h-5 mr-2" /><span className="font-medium">返回</span></button>
             <div className="h-4 w-px bg-gray-800 mx-2"></div>
-            <h1 className="text-sm font-bold text-gray-300 truncate max-w-2xl">{title}</h1>
+            <h1 className="text-sm font-bold text-white truncate max-w-2xl" style={{ color: '#ffffff' }}>{title}</h1>
         </div>
         <div className="flex gap-2">
            <button 
@@ -597,6 +597,7 @@ export default function VideoDetail() {
              className={`p-2 hover:bg-gray-800 rounded-lg transition ${
                isLiked ? 'text-red-500' : 'text-gray-400'
              }`}
+             style={{ color: isLiked ? '#ef4444' : '#9ca3af' }}
              title={isLiked ? '取消收藏' : '收藏'}
            >
              <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
@@ -608,6 +609,7 @@ export default function VideoDetail() {
              }}
              className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 transition"
              title="分享到团队"
+             style={{ color: '#9ca3af' }}
            >
              <Share2 className="w-5 h-5" />
            </button>
@@ -615,14 +617,14 @@ export default function VideoDetail() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 bg-gray-950 flex flex-col relative overflow-y-auto min-w-[400px]">
-          <div className="w-full bg-black shadow-2xl relative shrink-0 border-b border-gray-800">
+        <div className="flex-1 bg-[#0a0a0a] flex flex-col relative overflow-y-auto min-w-[400px] custom-scrollbar" style={{ backgroundColor: '#0a0a0a' }}>
+          <div className="w-full bg-[#0a0a0a] shadow-2xl relative shrink-0 border-b border-gray-800" style={{ backgroundColor: '#0a0a0a' }}>
             <div className="w-full aspect-video max-h-[70vh]">
                 <iframe src={getEmbedUrl(videoUrl)} title={title} className={`w-full h-full ${isResizing ? 'pointer-events-none' : ''}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
             </div>
           </div>
-          <div className="p-8 flex-1">
-            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center"><Layers className="w-4 h-4 mr-2"/> Keyframe Storyboard</h3>
+          <div className="p-8 flex-1 bg-[#0a0a0a]" style={{ backgroundColor: '#0a0a0a' }}>
+            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center" style={{ color: '#9ca3af' }}><Layers className="w-4 h-4 mr-2"/> Keyframe Storyboard</h3>
              <div className="grid grid-cols-4 gap-4">
                 {/* 从视频 URL 提取 ID 用于关键帧 */}
                 {(() => {
@@ -652,12 +654,12 @@ export default function VideoDetail() {
                   );
                 })()}
             </div>
-            <p className="text-xs text-gray-500 mt-2">* 关键帧由 YouTube 自动生成。</p>
+            <p className="text-xs text-gray-400 mt-2" style={{ color: '#9ca3af' }}>* 关键帧由 YouTube 自动生成。</p>
           </div>
         </div>
 
         <div className="w-[4px] bg-gray-900 hover:bg-blue-500 cursor-col-resize hover:w-[6px] transition-all duration-150 z-50 flex flex-col justify-center items-center group relative border-l border-gray-800" onMouseDown={startResizing}>
-            <div className="h-8 w-1 bg-gray-700 rounded-full group-hover:bg-white transition-colors"></div>
+            <div className="h-8 w-1 bg-gray-700 rounded-full group-hover:bg-blue-400 transition-colors"></div>
         </div>
 
         <div ref={sidebarRef} style={{ width: sidebarWidth }} className="border-l border-gray-800 bg-[#0a0a0a] flex flex-col shrink-0 h-full relative z-20">
@@ -666,7 +668,7 @@ export default function VideoDetail() {
             <h3 className="text-lg font-semibold text-white">视频分析</h3>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide bg-[#0a0a0a]">
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-[#0a0a0a] custom-scrollbar" style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 #0a0a0a' }}>
             {/* 降级模式提示 - 显示为警告，不是错误 */}
             {analysis.status === 'success' && analysis.degraded && (
                 <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg text-yellow-400 text-xs mb-4">
@@ -801,7 +803,7 @@ export default function VideoDetail() {
             <>
                 {/* 主要分析内容 */}
                 <AnalysisSection title="分析内容" loading={analysis.status === 'loading'}>
-                    <div className={`bg-[#1a1a1a] p-4 rounded-lg border border-gray-800 text-sm text-gray-300 leading-relaxed whitespace-pre-line ${analysis.status === 'loading'?'animate-pulse':''}`}>
+                    <div className={`bg-[#1a1a1a] p-4 rounded-lg border border-gray-800 text-sm text-gray-300 leading-relaxed whitespace-pre-line ${analysis.status === 'loading'?'animate-pulse':''}`} style={{ backgroundColor: '#1a1a1a', color: '#d1d5db' }}>
                         {analysis.visual.style || analysis.motion.analysis || "暂无分析内容"}
                     </div>
                 </AnalysisSection>
@@ -863,7 +865,7 @@ export default function VideoDetail() {
                 <AnalysisSection title="TAGS">
                     <div className="flex flex-wrap gap-2 mb-4">
                         {tags.map((tag: string, index: number) => (
-                            <span key={index} className="px-2.5 py-1 bg-[#1a1a1a] text-gray-300 text-xs rounded border border-gray-800 hover:border-gray-600 cursor-pointer transition">#{tag}</span>
+                            <span key={index} className="px-2.5 py-1 bg-[#1a1a1a] text-gray-300 text-xs rounded border border-gray-800 hover:border-gray-600 cursor-pointer transition" style={{ backgroundColor: '#1a1a1a', color: '#d1d5db' }}>#{tag}</span>
                         ))}
                      </div>
                 </AnalysisSection>
