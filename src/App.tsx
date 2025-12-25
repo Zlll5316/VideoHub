@@ -94,7 +94,7 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a12] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center" style={{ backgroundColor: '#0a0a0a' }}>
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-400 text-sm">正在连接...</p>
@@ -106,7 +106,7 @@ function App() {
   console.log('🎨 渲染 App，session:', session ? '已登录' : '未登录');
 
   return (
-    <div className="min-h-screen bg-[#0a0a12] text-slate-200">
+    <div className="min-h-screen bg-[#0a0a0a] text-slate-200" style={{ backgroundColor: '#0a0a0a', minHeight: '100vh' }}>
       <Router>
         {!session ? (
           <>
