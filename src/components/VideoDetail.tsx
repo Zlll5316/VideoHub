@@ -410,8 +410,8 @@ export default function VideoDetail() {
   useEffect(() => {
     if (!id) return;
 
-    // 从 Notion 加载分析数据
-    const loadAnalysisFromNotion = async () => {
+    // 从 Notion 加载分析数据（支持自动回退）
+    const loadAnalysisFromNotion = async (useFallback = false) => {
         setAnalysis((prev:any) => ({ 
           ...prev, 
           status: 'loading', 
@@ -420,12 +420,16 @@ export default function VideoDetail() {
 
         try {
             console.log(`📡 从 Notion 加载视频分析数据...`);
+            const apiUrl = getApiUrl('fetch_video_list', useFallback);
+            console.log('📡 VideoDetail 分析: API URL:', apiUrl);
             
-            const response = await fetch(getApiUrl('fetch_video_list'), {
+            const response = await fetch(apiUrl, {
               method: 'GET',
               headers: { 'Content-Type': 'application/json' },
               signal: AbortSignal.timeout(10000)
             });
+            
+            console.log('📡 VideoDetail 分析: 响应状态:', response.status, response.statusText);
             
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -509,6 +513,15 @@ export default function VideoDetail() {
             }
         } catch (e: any) {
             console.error("❌ 从 Notion 加载失败:", e);
+            
+            // 如果是本地开发环境且是网络错误，自动回退到 Vercel 生产 API
+            if (!useFallback && 
+                (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+                (e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError') || e.name === 'TypeError')) {
+              console.log('🔄 VideoDetail 分析: 本地后端连接失败，自动回退到 Vercel 生产 API...');
+              // 递归调用，使用回退模式
+              return loadAnalysisFromNotion(true);
+            }
             
             // 判断错误类型
             const isNetworkError = e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError') || e.message?.includes('timeout');
