@@ -116,7 +116,7 @@ export default function Shortcuts() {
           title: '我的收藏',
           description: '管理已采集的灵感视频',
           icon: Bookmark,
-          link: '/library',
+          link: '/favorites',
           color: 'from-yellow-600/30 to-yellow-500/30 border-yellow-500/30',
         },
         {

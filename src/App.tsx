@@ -13,6 +13,7 @@ import Shortcuts from './components/Shortcuts';
 import FolderDetail from './components/FolderDetail';
 import TeamSpace from './components/TeamSpace';
 import TaskDetail from './components/TaskDetail';
+import Favorites from './pages/Favorites';
 import { supabase } from './lib/supabase';
 
 function AppContent() {
@@ -31,6 +32,7 @@ function AppContent() {
         <Route path="/shortcuts" element={<Shortcuts />} />
         <Route path="/folder/:id" element={<FolderDetail />} />
         <Route path="/team" element={<TeamSpace />} />
+        <Route path="/favorites" element={<Favorites />} />
       </Route>
     </Routes>
   );

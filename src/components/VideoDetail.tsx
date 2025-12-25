@@ -10,8 +10,6 @@ export default function VideoDetail() {
   const navigate = useNavigate();
   const [video, setVideo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  // 已移除：不再需要标签切换，统一显示所有分析内容
-  // const [activeTab, setActiveTab] = useState<'visual' | 'motion' | 'script'>('visual');
   
   // 获取后端 API URL（从环境变量或使用默认值）
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -27,6 +25,9 @@ export default function VideoDetail() {
   // 从视频封面提取的真实颜色
   const [extractedColors, setExtractedColors] = useState<string[]>([]);
   const [colorsExtracting, setColorsExtracting] = useState(false);
+  
+  // 新增：用于处理复制色值的状态
+  const [copiedColor, setCopiedColor] = useState<string | null>(null);
   
   // 收藏状态
   const [isLiked, setIsLiked] = useState(false);
@@ -192,6 +193,17 @@ export default function VideoDetail() {
     }
   };
 
+  // 复制色值处理函数
+  const handleCopyColor = (color: string) => {
+    navigator.clipboard.writeText(color).then(() => {
+        setCopiedColor(color);
+        // 1.5秒后重置状态
+        setTimeout(() => setCopiedColor(null), 1500);
+    }).catch(err => {
+        console.error('无法复制颜色:', err);
+    });
+  };
+
   const startResizing = useCallback(() => setIsResizing(true), []);
   const stopResizing = useCallback(() => setIsResizing(false), []);
   const resize = useCallback((mouseEvent: MouseEvent) => {
@@ -237,7 +249,6 @@ export default function VideoDetail() {
               const notionVideo = result.data.find((item: any) => {
                 // 匹配 Notion ID
                 if (item.id === id) {
-                  console.log('✅ 通过 Notion ID 匹配:', item.id);
                   return true;
                 }
                 // 匹配从 URL 提取的 YouTube ID
@@ -245,32 +256,21 @@ export default function VideoDetail() {
                   if (item.url.includes('youtube.com/watch?v=')) {
                     const videoId = item.url.split('v=')[1]?.split('&')[0];
                     if (videoId === id) {
-                      console.log('✅ 通过 YouTube ID 匹配:', videoId);
                       return true;
                     }
                   } else if (item.url.includes('youtu.be/')) {
                     const videoId = item.url.split('youtu.be/')[1]?.split('?')[0];
                     if (videoId === id) {
-                      console.log('✅ 通过 YouTube 短链接 ID 匹配:', videoId);
                       return true;
                     }
                   }
                   // 如果 URL 包含 ID（部分匹配）
                   if (item.url.includes(id)) {
-                    console.log('✅ 通过 URL 部分匹配:', item.url);
                     return true;
                   }
                 }
                 return false;
               });
-              
-              if (!notionVideo) {
-                console.warn('⚠️ VideoDetail: 在 Notion 数据中未找到匹配的视频');
-                console.log('前3个视频的ID和URL:', result.data.slice(0, 3).map((item: any) => ({
-                  id: item.id,
-                  url: item.url?.substring(0, 50)
-                })));
-              }
               
               if (notionVideo) {
                 // 转换为 Video 格式
@@ -294,7 +294,6 @@ export default function VideoDetail() {
                   sourceUrl: notionVideo.url
                 };
                 
-                console.log('✅ VideoDetail: 从 Notion 找到视频:', videoData.title);
                 setVideo(videoData);
                 setLoading(false);
                 return;
@@ -326,7 +325,6 @@ export default function VideoDetail() {
         
         const foundVideo = uniqueTasksMap.get(String(id));
         if (foundVideo) { 
-          console.log('✅ VideoDetail: 从本地数据找到视频:', foundVideo.title || foundVideo.videoName);
           setVideo(foundVideo); 
         } else {
           console.warn('❌ VideoDetail: 未找到视频，ID:', id);
@@ -532,8 +530,6 @@ export default function VideoDetail() {
       return url;
     }
   };
-
-  // 已移除：不再需要 TabButton 组件
 
   const AnalysisSection = ({ title, children, loading=false }: any) => (
       <section className="border-b border-gray-800 pb-6 last:border-0 last:pb-0">
@@ -824,7 +820,7 @@ export default function VideoDetail() {
                 </AnalysisSection>
                 
                 {/* 配色方案 - 从视频封面真实提取 */}
-                <AnalysisSection title="COLOR PALETTE">
+                <AnalysisSection title="封面色值">
                     {/* 隐藏的图片用于提取颜色 */}
                     {coverImageUrl && displayColors.length === 0 && (
                         <div className="absolute inset-0 pointer-events-none opacity-0 w-1 h-1 overflow-hidden">
@@ -853,12 +849,15 @@ export default function VideoDetail() {
                             {displayColors.slice(0, 4).map((color: string, index: number) => (
                                 <div
                                     key={index}
-                                    className="flex-1 h-16 rounded-lg border border-white/10 overflow-hidden group cursor-pointer hover:scale-105 transition-transform"
+                                    onClick={() => handleCopyColor(color)}
+                                    className="flex-1 h-16 rounded-lg border border-white/10 overflow-hidden group cursor-pointer hover:scale-105 transition-transform relative"
                                     style={{ backgroundColor: color }}
-                                    title={color}
+                                    title="点击复制色值"
                                 >
-                                    <div className="h-full w-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
-                                        <span className="text-xs font-mono text-white drop-shadow-lg">{color}</span>
+                                    <div className={`h-full w-full flex items-center justify-center transition-opacity bg-black/20 ${copiedColor === color ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                        <span className="text-xs font-mono text-white drop-shadow-lg font-bold">
+                                            {copiedColor === color ? '已复制' : color}
+                                        </span>
                                     </div>
                                 </div>
                             ))}
