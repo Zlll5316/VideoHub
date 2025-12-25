@@ -9,7 +9,18 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [quickCollectUrl, setQuickCollectUrl] = useState('');
   
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  // 检测环境：生产环境使用 Vercel API 代理，开发环境使用本地后端
+  const getApiUrl = () => {
+    if (import.meta.env.VITE_API_URL) {
+      return `${import.meta.env.VITE_API_URL}/fetch_video_list`;
+    }
+    // 生产环境使用 Vercel API 代理
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return '/api/notion';
+    }
+    // 开发环境使用本地后端
+    return 'http://localhost:8000/fetch_video_list';
+  };
 
   // 从 Notion 加载数据
   useEffect(() => {
@@ -17,7 +28,7 @@ export default function Dashboard() {
       setIsLoading(true);
       try {
         console.log('🔄 开始从 Notion 加载数据...');
-        const response = await fetch(`${API_URL}/fetch_video_list`, {
+        const response = await fetch(getApiUrl(), {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           signal: AbortSignal.timeout(60000)

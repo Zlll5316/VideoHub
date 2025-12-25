@@ -34,13 +34,25 @@ export default function Library() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  // 检测环境：生产环境使用 Vercel API 代理，开发环境使用本地后端
+  const getApiUrl = () => {
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
+    }
+    // 生产环境使用 Vercel API 代理
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return '/api/notion';
+    }
+    // 开发环境使用本地后端
+    return 'http://localhost:8000/fetch_video_list';
+  };
 
   // 1. 加载数据
   const loadFromNotion = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/fetch_video_list`, { signal: AbortSignal.timeout(60000) });
+      const apiUrl = getApiUrl();
+      const response = await fetch(apiUrl, { signal: AbortSignal.timeout(60000) });
       const result = await response.json();
       
       if (result.status === 'success' && result.data) {

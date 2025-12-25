@@ -11,8 +11,18 @@ export default function VideoDetail() {
   const [video, setVideo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // 获取后端 API URL（从环境变量或使用默认值）
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  // 检测环境：生产环境使用 Vercel API 代理，开发环境使用本地后端
+  const getApiUrl = (endpoint: string = 'fetch_video_list') => {
+    if (import.meta.env.VITE_API_URL) {
+      return `${import.meta.env.VITE_API_URL}/${endpoint}`;
+    }
+    // 生产环境使用 Vercel API 代理
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return '/api/notion';
+    }
+    // 开发环境使用本地后端
+    return `http://localhost:8000/${endpoint}`;
+  };
   
   const [analysis, setAnalysis] = useState<any>({
     visual: { style: "等待分析...", status: 'idle' },
@@ -248,9 +258,8 @@ export default function VideoDetail() {
         console.log('🔍 VideoDetail: 开始加载视频数据，ID:', id);
         
         // 1. 优先从 Notion 加载
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
         try {
-          const response = await fetch(`${API_URL}/fetch_video_list`, {
+          const response = await fetch(getApiUrl('fetch_video_list'), {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
             signal: AbortSignal.timeout(60000) // 增加超时时间到60秒
@@ -370,7 +379,7 @@ export default function VideoDetail() {
         try {
             console.log(`📡 从 Notion 加载视频分析数据...`);
             
-            const response = await fetch(`${API_URL}/fetch_video_list`, {
+            const response = await fetch(getApiUrl('fetch_video_list'), {
               method: 'GET',
               headers: { 'Content-Type': 'application/json' },
               signal: AbortSignal.timeout(10000)
@@ -651,13 +660,13 @@ export default function VideoDetail() {
             <div className="h-8 w-1 bg-gray-700 rounded-full group-hover:bg-white transition-colors"></div>
         </div>
 
-        <div ref={sidebarRef} style={{ width: sidebarWidth }} className="border-l border-gray-800 bg-black flex flex-col shrink-0 h-full relative z-20">
+        <div ref={sidebarRef} style={{ width: sidebarWidth }} className="border-l border-gray-800 bg-[#0a0a0a] flex flex-col shrink-0 h-full relative z-20">
           {/* 统一的"视频分析"标题 */}
-          <div className="flex shrink-0 border-b border-gray-800 px-6 py-4">
+          <div className="flex shrink-0 border-b border-gray-800 px-6 py-4 bg-[#0a0a0a]">
             <h3 className="text-lg font-semibold text-white">视频分析</h3>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide bg-[#0a0a0a]">
             {/* 降级模式提示 - 显示为警告，不是错误 */}
             {analysis.status === 'success' && analysis.degraded && (
                 <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg text-yellow-400 text-xs mb-4">
@@ -674,13 +683,13 @@ export default function VideoDetail() {
             )}
             
             {analysis.status === 'error' && (
-                <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-lg text-red-400 text-xs mb-4">
+                <div className="bg-red-950/90 backdrop-blur-sm border border-red-800 p-4 rounded-lg text-red-100 text-xs mb-4">
                     <div className="flex gap-2 items-start mb-3">
-                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-300" />
                         <div className="flex-1">
-                            <div className="font-semibold mb-1">{analysis.notes}</div>
+                            <div className="font-semibold mb-1 text-red-100">{analysis.notes}</div>
                             {analysis.errorDetails && (
-                                <div className="text-red-300/80 whitespace-pre-line text-[10px] leading-relaxed mt-2">
+                                <div className="text-red-200/90 whitespace-pre-line text-[10px] leading-relaxed mt-2">
                                     {analysis.errorDetails}
                                 </div>
                             )}
@@ -697,7 +706,7 @@ export default function VideoDetail() {
                                 
                                 try {
                                     // 重新从 Notion 加载
-                                    const response = await fetch(`${API_URL}/fetch_video_list`, {
+                                    const response = await fetch(getApiUrl('fetch_video_list'), {
                                       method: 'GET',
                                       headers: { 'Content-Type': 'application/json' },
                                       signal: AbortSignal.timeout(30000)
@@ -792,7 +801,7 @@ export default function VideoDetail() {
             <>
                 {/* 主要分析内容 */}
                 <AnalysisSection title="分析内容" loading={analysis.status === 'loading'}>
-                    <div className={`bg-gray-900/50 p-4 rounded-lg border border-gray-800 text-sm text-gray-300 leading-relaxed whitespace-pre-line ${analysis.status === 'loading'?'animate-pulse':''}`}>
+                    <div className={`bg-[#1a1a1a] p-4 rounded-lg border border-gray-800 text-sm text-gray-300 leading-relaxed whitespace-pre-line ${analysis.status === 'loading'?'animate-pulse':''}`}>
                         {analysis.visual.style || analysis.motion.analysis || "暂无分析内容"}
                     </div>
                 </AnalysisSection>
@@ -854,7 +863,7 @@ export default function VideoDetail() {
                 <AnalysisSection title="TAGS">
                     <div className="flex flex-wrap gap-2 mb-4">
                         {tags.map((tag: string, index: number) => (
-                            <span key={index} className="px-2.5 py-1 bg-gray-900 text-gray-300 text-xs rounded border border-gray-800 hover:border-gray-600 cursor-pointer transition">#{tag}</span>
+                            <span key={index} className="px-2.5 py-1 bg-[#1a1a1a] text-gray-300 text-xs rounded border border-gray-800 hover:border-gray-600 cursor-pointer transition">#{tag}</span>
                         ))}
                      </div>
                 </AnalysisSection>
@@ -871,7 +880,7 @@ export default function VideoDetail() {
             onClick={() => setIsShareModalOpen(false)}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-md backdrop-blur-xl bg-slate-900/80 border border-white/10 rounded-xl shadow-[0_0_40px_rgba(147,51,234,0.2)] p-8 relative">
+            <div className="w-full max-w-md backdrop-blur-xl bg-[#0a0a0a] border border-gray-800 rounded-xl shadow-[0_0_40px_rgba(147,51,234,0.2)] p-8 relative">
               <button
                 onClick={() => setIsShareModalOpen(false)}
                 className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-colors"
