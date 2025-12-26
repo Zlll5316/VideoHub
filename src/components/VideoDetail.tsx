@@ -338,7 +338,12 @@ export default function VideoDetail() {
                   analysis: notionVideo.analysis || '',
                   sourceUrl: notionVideo.url,
                   // 保留原始 Notion ID，用于后续匹配
-                  notionId: notionVideo.id
+                  notionId: notionVideo.id,
+                  // Notion 分类标签
+                  company: notionVideo.company || [],
+                  animationType: notionVideo.animationType || [],
+                  technique: notionVideo.technique || [],
+                  features: notionVideo.features || []
                 };
                 
                 setVideo(videoData);
@@ -454,43 +459,74 @@ export default function VideoDetail() {
                   return false;
                 });
                 
-                if (notionItem && notionItem.analysis) {
-                    // Notion 的分析内容是纯文本，直接使用
-                    const analysisText = notionItem.analysis;
-                    
-                    // 尝试解析为 JSON（如果用户格式化了）
-                    let analysisData;
-                    try {
-                        analysisData = JSON.parse(analysisText);
-                    } catch {
-                        // 如果不是 JSON，当作纯文本处理，显示在所有 Tab 中
-                        analysisData = {
-                            visual_style: analysisText,
-                            motion_analysis: analysisText,
-                            script_structure: []
-                        };
+                if (notionItem) {
+                    // 更新 video 对象中的分类标签
+                    if (notionItem.company || notionItem.animationType || notionItem.technique || notionItem.features) {
+                        setVideo((prev: any) => ({
+                            ...prev,
+                            company: notionItem.company || prev?.company || [],
+                            animationType: notionItem.animationType || prev?.animationType || [],
+                            technique: notionItem.technique || prev?.technique || [],
+                            features: notionItem.features || prev?.features || []
+                        }));
                     }
                     
-                    setAnalysis({
-                        visual: { 
-                            style: analysisData.visual_style || analysisText || "暂无分析内容", 
-                            status: 'done'
-                        },
-                        motion: { 
-                            analysis: analysisData.motion_analysis || analysisText || "暂无分析内容", 
-                            status: 'done' 
-                        },
-                        script: { 
-                            structure: analysisData.script_structure || [], 
-                            status: 'done' 
-                        },
-                        status: 'success',
-                        notes: `已从 Notion 加载分析数据 (${analysisText.length} 字符)`
-                    });
-                    
-                    console.log('✅ 从 Notion 加载分析数据成功，长度:', analysisText.length);
+                    if (notionItem.analysis) {
+                        // Notion 的分析内容是纯文本，直接使用
+                        const analysisText = notionItem.analysis;
+                        
+                        // 尝试解析为 JSON（如果用户格式化了）
+                        let analysisData;
+                        try {
+                            analysisData = JSON.parse(analysisText);
+                        } catch {
+                            // 如果不是 JSON，当作纯文本处理，显示在所有 Tab 中
+                            analysisData = {
+                                visual_style: analysisText,
+                                motion_analysis: analysisText,
+                                script_structure: []
+                            };
+                        }
+                        
+                        setAnalysis({
+                            visual: { 
+                                style: analysisData.visual_style || analysisText || "暂无分析内容", 
+                                status: 'done'
+                            },
+                            motion: { 
+                                analysis: analysisData.motion_analysis || analysisText || "暂无分析内容", 
+                                status: 'done' 
+                            },
+                            script: { 
+                                structure: analysisData.script_structure || [], 
+                                status: 'done' 
+                            },
+                            status: 'success',
+                            notes: `已从 Notion 加载分析数据 (${analysisText.length} 字符)`
+                        });
+                        
+                        console.log('✅ 从 Notion 加载分析数据成功，长度:', analysisText.length);
+                    } else {
+                        // 没有找到对应的分析数据
+                        setAnalysis({
+                            visual: { 
+                                style: "该视频在 Notion 中暂无分析内容，请在 Notion 中补充", 
+                                status: 'done'
+                            },
+                            motion: { 
+                                analysis: "该视频在 Notion 中暂无分析内容，请在 Notion 中补充", 
+                                status: 'done' 
+                            },
+                            script: { 
+                                structure: [], 
+                                status: 'done' 
+                            },
+                            status: 'success',
+                            notes: "Notion 中暂无此视频的分析内容"
+                        });
+                    }
                 } else {
-                    // 没有找到对应的分析数据
+                    // 没有找到对应的视频数据
                     setAnalysis({
                         visual: { 
                             style: "该视频在 Notion 中暂无分析内容，请在 Notion 中补充", 
@@ -588,7 +624,11 @@ export default function VideoDetail() {
 
   const title = video.title || video.videoName || "无标题";
   const videoUrl = video.url || video.videoSource;
-  const tags = video.tags || ['SaaS', 'Demo'];
+  // 获取 Notion 分类标签
+  const companyTags = video?.company || [];
+  const animationTypeTags = video?.animationType || [];
+  const techniqueTags = video?.technique || [];
+  const featuresTags = video?.features || [];
   // 获取封面图 URL
   const coverImageUrl = video.coverUrl || video.coverImage || `https://img.youtube.com/vi/${id}/maxresdefault.jpg`;
   
@@ -783,40 +823,60 @@ export default function VideoDetail() {
                                           return false;
                                         });
                                         
-                                        if (notionItem && notionItem.analysis) {
-                                            let analysisData;
-                                            try {
-                                                analysisData = JSON.parse(notionItem.analysis);
-                                            } catch {
-                                                analysisData = {
-                                                    visual_style: notionItem.analysis,
-                                                    motion_analysis: notionItem.analysis,
-                                                    script_structure: []
-                                                };
+                                        if (notionItem) {
+                                            // 更新 video 对象中的分类标签
+                                            if (notionItem.company || notionItem.animationType || notionItem.technique || notionItem.features) {
+                                                setVideo((prev: any) => ({
+                                                    ...prev,
+                                                    company: notionItem.company || prev?.company || [],
+                                                    animationType: notionItem.animationType || prev?.animationType || [],
+                                                    technique: notionItem.technique || prev?.technique || [],
+                                                    features: notionItem.features || prev?.features || []
+                                                }));
                                             }
                                             
-                                            setAnalysis({
-                                                visual: { 
-                                                    style: analysisData.visual_style || notionItem.analysis || "暂无分析内容", 
-                                                    status: 'done'
-                                                },
-                                                motion: { 
-                                                    analysis: analysisData.motion_analysis || notionItem.analysis || "暂无分析内容", 
-                                                    status: 'done' 
-                                                },
-                                                script: { 
-                                                    structure: analysisData.script_structure || [], 
-                                                    status: 'done' 
-                                                },
-                                                status: 'success',
-                                                notes: "已从 Notion 重新加载"
-                                            });
+                                            if (notionItem.analysis) {
+                                                let analysisData;
+                                                try {
+                                                    analysisData = JSON.parse(notionItem.analysis);
+                                                } catch {
+                                                    analysisData = {
+                                                        visual_style: notionItem.analysis,
+                                                        motion_analysis: notionItem.analysis,
+                                                        script_structure: []
+                                                    };
+                                                }
+                                                
+                                                setAnalysis({
+                                                    visual: { 
+                                                        style: analysisData.visual_style || notionItem.analysis || "暂无分析内容", 
+                                                        status: 'done'
+                                                    },
+                                                    motion: { 
+                                                        analysis: analysisData.motion_analysis || notionItem.analysis || "暂无分析内容", 
+                                                        status: 'done' 
+                                                    },
+                                                    script: { 
+                                                        structure: analysisData.script_structure || [], 
+                                                        status: 'done' 
+                                                    },
+                                                    status: 'success',
+                                                    notes: "已从 Notion 重新加载"
+                                                });
+                                            } else {
+                                                setAnalysis((prev:any) => ({ 
+                                                    ...prev, 
+                                                    status: 'error', 
+                                                    notes: "Notion 中暂无此视频的分析内容",
+                                                    errorDetails: "请在 Notion 数据库中补充该视频的分析内容"
+                                                }));
+                                            }
                                         } else {
                                             setAnalysis((prev:any) => ({ 
                                                 ...prev, 
                                                 status: 'error', 
-                                                notes: "Notion 中暂无此视频的分析内容",
-                                                errorDetails: "请在 Notion 数据库中补充该视频的分析内容"
+                                                notes: "无法从 Notion 加载数据",
+                                                errorDetails: "未找到对应的视频数据"
                                             }));
                                         }
                                     } else {
@@ -917,12 +977,70 @@ export default function VideoDetail() {
                     )}
                 </AnalysisSection>
                 
-                <AnalysisSection title="TAGS">
-                    <div className="flex flex-wrap gap-2 mb-4">
-                        {tags.map((tag: string, index: number) => (
-                            <span key={index} className="px-2.5 py-1 bg-[#1a1a1a] text-gray-300 text-xs rounded border border-gray-800 hover:border-gray-600 cursor-pointer transition" style={{ backgroundColor: '#1a1a1a', color: '#d1d5db' }}>#{tag}</span>
-                        ))}
-                     </div>
+                {/* Notion 分类标签 */}
+                <AnalysisSection title="分类标签">
+                    <div className="space-y-4">
+                        {/* 公司/品牌 */}
+                        {companyTags.length > 0 && (
+                            <div>
+                                <div className="text-xs text-gray-400 mb-2 font-medium">公司/品牌</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {companyTags.map((tag: string, index: number) => (
+                                        <span key={index} className="px-2.5 py-1 bg-blue-900/30 text-blue-300 text-xs rounded border border-blue-800/50" style={{ backgroundColor: '#1e3a8a33', color: '#93c5fd' }}>
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* 动画类型 */}
+                        {animationTypeTags.length > 0 && (
+                            <div>
+                                <div className="text-xs text-gray-400 mb-2 font-medium">动画类型</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {animationTypeTags.map((tag: string, index: number) => (
+                                        <span key={index} className="px-2.5 py-1 bg-purple-900/30 text-purple-300 text-xs rounded border border-purple-800/50" style={{ backgroundColor: '#581c8733', color: '#c4b5fd' }}>
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* 表现手法 */}
+                        {techniqueTags.length > 0 && (
+                            <div>
+                                <div className="text-xs text-gray-400 mb-2 font-medium">表现手法</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {techniqueTags.map((tag: string, index: number) => (
+                                        <span key={index} className="px-2.5 py-1 bg-emerald-900/30 text-emerald-300 text-xs rounded border border-emerald-800/50" style={{ backgroundColor: '#064e3b33', color: '#6ee7b7' }}>
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* 典型特征 */}
+                        {featuresTags.length > 0 && (
+                            <div>
+                                <div className="text-xs text-gray-400 mb-2 font-medium">典型特征</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {featuresTags.map((tag: string, index: number) => (
+                                        <span key={index} className="px-2.5 py-1 bg-amber-900/30 text-amber-300 text-xs rounded border border-amber-800/50" style={{ backgroundColor: '#78350f33', color: '#fcd34d' }}>
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* 如果所有分类都为空，显示提示 */}
+                        {companyTags.length === 0 && animationTypeTags.length === 0 && techniqueTags.length === 0 && featuresTags.length === 0 && (
+                            <div className="text-xs text-gray-500 italic">暂无分类标签</div>
+                        )}
+                    </div>
                 </AnalysisSection>
             </>
           </div>
